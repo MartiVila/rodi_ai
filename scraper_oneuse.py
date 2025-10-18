@@ -1,27 +1,42 @@
 import requests
 from bs4 import BeautifulSoup
-import re
+import unicodedata
 
-url = "https://cercanias.info/en/rodalies-catalunya/lines/r1-molins-de-rei-macanet-massanes-by-mataro"
+def normalize_station_name(name):
+    # Remove accents
+    name = unicodedata.normalize('NFD', name)
+    name = name.encode('ascii', 'ignore').decode('utf-8')
+    # Uppercase everything
+    name = name.upper()
+    return name
 
-response = requests.get(url)
-soup = BeautifulSoup(response.content, "html.parser")
+def scrape_rodalies_line_stations(url):
 
-station_elements = soup.find_all("p", class_="text-xl font-medium leading-6")
+    url = "https://cercanias.info/en/rodalies-catalunya/lines/r1-molins-de-rei-macanet-massanes-by-mataro"
 
-stations = []
-for name_element in station_elements:
-    station_name = name_element.get_text(strip=True)
-    stations.append(station_name)
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, "html.parser")
 
-print("Stations found:", stations)
+    station_elements = soup.find_all("p", class_="text-xl font-medium leading-6")
 
+    stations = []
+    for name_element in station_elements:
+        station_name = name_element.get_text(strip=True)
+        station_name = normalize_station_name(station_name)
+        stations.append(station_name)
 
-connections = []
-for i in range(len(stations) - 1):
-    connections.append((stations[i], stations[i + 1]))
+    print("Stations found by the scrapper:", stations)
 
-for conn in connections:
-    print(f"{conn[0]} - {conn[1]}")
+    #We have to fill a list of tuples with the connections between stations
+    #This way the model will be able to create the graph
+    connections = []
+    for i in range(len(stations) - 1):
+        connections.append((stations[i], stations[i + 1]))
 
-#Ficar el reutnr quan def
+    for connection in connections:
+        print(f"{connection[0]} - {connection[1]}")
+
+    print("Scraping completed.", url)
+
+    return connections
+
