@@ -411,24 +411,32 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
         output_filename (str): Name of the HTML file to save the map to.
     """
         
-    #we are gonna use the maximum latitude and longitude to center the map
-    #this way we are preventing stations taht are far away from being cut off
-    latitudes = [data['lat'] for _, data in graph.nodes(data=True) 
-                 if data['lat'] is not None and not math.isnan(data['lat'])]
-    longitudes = [data['lon'] for _, data in graph.nodes(data=True) 
-                  if data['lon'] is not None and not math.isnan(data['lon'])]
-                  
+    # Collect valid coordinates from the graph
+    latitudes = [data['lat'] for _, data in graph.nodes(data=True)
+                if data.get('lat') is not None and not (isinstance(data.get('lat'), float) and math.isnan(data.get('lat')))]
+    longitudes = [data['lon'] for _, data in graph.nodes(data=True)
+                if data.get('lon') is not None and not (isinstance(data.get('lon'), float) and math.isnan(data.get('lon')))]
+
     if not latitudes or not longitudes:
         print("Error: No valid coordinates found to create a geographic map.")
         return
-    #We use the maximum nstad of the average to ensure all points are visible, are not leave
-    max_lat = np.max(latitudes)
-    max_lon = np.max(longitudes)
 
-    #the nice background never came, is plain gray
-    m = folium.Map(location=[max_lat, max_lon], zoom_start=9, tiles="Stamen Terrain")
+    max_lat = float(np.max(latitudes))
+    max_lon = float(np.max(longitudes))
+    min_lat = float(np.min(latitudes))
+    min_lon = float(np.min(longitudes))
 
-    
+    # Create a folium map WITHOUT default tiles so we can add layers (OSM, OpenRailwayMap, CartoDB)
+    m = folium.Map(location=[(min_lat + max_lat) / 2, (min_lon + max_lon) / 2], zoom_start=8, tiles=None)
+
+    # Base layers: OpenStreetMap and CartoDB
+    folium.TileLayer('OpenStreetMap', name='OpenStreetMap').add_to(m)
+    folium.TileLayer('CartoDB Positron', name='CartoDB Positron').add_to(m)
+
+    # OpenRailwayMap as an overlay to highlight rail infrastructure
+    orm_tiles = 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png'
+    folium.TileLayer(tiles=orm_tiles, attr='OpenRailwayMap', name='OpenRailwayMap', overlay=True, control=True).add_to(m)
+
     station_group = folium.FeatureGroup(name="Rodalies Stations").add_to(m)
     
     #adding the nodes
@@ -448,28 +456,34 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
                 fill_opacity=0.9,
                 popup=f"<b>{original_name}</b><br>ID: {data.get('id')}"
             ).add_to(station_group)
-  
+
     #Use a separate FeatureGroup for lines
     line_group = folium.FeatureGroup(name="Rail Connections").add_to(m)
 
     for u, v, edge_data in graph.edges(data=True):
-        lat_u, lon_u = graph.nodes[u]['lat'], graph.nodes[u]['lon']
-        lat_v, lon_v = graph.nodes[v]['lat'], graph.nodes[v]['lon']
-        distance = edge_data.get('distance_km', 'N/A')
+        lat_u, lon_u = graph.nodes[u].get('lat'), graph.nodes[u].get('lon')
+        lat_v, lon_v = graph.nodes[v].get('lat'), graph.nodes[v].get('lon')
+        distance = edge_data.get('distance_km', None)
 
-        if not any(math.isnan(coord) for coord in [lat_u, lson_u, lat_v, lon_v]):
-            # Create a line segment between the two stations
+        # Ensure coordinates are valid numbers
+        if None not in (lat_u, lon_u, lat_v, lon_v) and not any(isinstance(c, float) and math.isnan(c) for c in (lat_u, lon_u, lat_v, lon_v)):
             points = [(lat_u, lon_u), (lat_v, lon_v)]
+            tooltip = f"Tram: {u} - {v}"
+            if distance is not None and isinstance(distance, (int, float)):
+                tooltip += f" distance: {distance:.2f} km"
             folium.PolyLine(
                 points,
                 color='gray',
                 weight=1.5,
                 opacity=0.8,
-                #The tooltip is useful to show information when hovering over the line
-                tooltip=f"Tram: {u} - {v} distance: {distance:.2f} km"
+                tooltip=tooltip
             ).add_to(line_group)
 
     folium.LayerControl().add_to(m)
+
+    # Fit map to bounds of all stations so the background covers Catalunya/area of interest
+    bounds = [[min_lat, min_lon], [max_lat, max_lon]]
+    m.fit_bounds(bounds, padding=(50, 50))
 
     m.save(output_filename)
     print(f"\n✅ Interactive map saved to: {output_filename}\nOpen this file in your browser to view the map.")

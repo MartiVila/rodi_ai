@@ -3,6 +3,12 @@
 import requests
 import time
 import json
+import os
+import math
+
+# path where scraper will dump latest trains for other processes to consume
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+LATEST_TRAINS_FILE = os.path.join(DATA_DIR, "latest_trains.json")
 
 #The fucntion of this script will be to get all the train infomration every 30 seconds, 
 #and be able to provide the AI model object trains with their position and between which stations they are
@@ -75,6 +81,65 @@ def get_train_data(url):
         print(f"Error decoding JSON: {e}")
         return []
 
+
+def write_trains_to_file(trains, path=LATEST_TRAINS_FILE):
+    """Write list of Train objects to JSON file as simple dicts.
+    This is intended for local IPC: other processes (map server) can read this file
+    instead of calling the remote API again.
+    """
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        serial = []
+        for t in trains:
+            try:
+                # sanitize numeric fields: allow commas as decimal separators
+                lat_raw = t.lat
+                lon_raw = t.lon
+                if isinstance(lat_raw, str):
+                    lat_raw = lat_raw.replace(',', '.')
+                if isinstance(lon_raw, str):
+                    lon_raw = lon_raw.replace(',', '.')
+                lat = float(lat_raw)
+                lon = float(lon_raw)
+                # validate lat/lon are finite
+                if not (math.isfinite(lat) and math.isfinite(lon)):
+                    continue
+
+                # sanitize speed: replace infinities/NaN with None
+                raw_speed = t.speed
+                try:
+                    # some code sets speed to float('inf') or a non-numeric
+                    speed = float(raw_speed)
+                    if not math.isfinite(speed):
+                        speed = None
+                except Exception:
+                    # if cannot coerce to float, set None
+                    speed = None
+
+                serial.append({
+                    'id': str(t.id),
+                    'trip': t.trip,
+                    'origin': t.origin,
+                    'destination': t.destination,
+                    'lat': lat,
+                    'lon': lon,
+                    'speed': speed,
+                    'status': t.status,
+                })
+            except Exception:
+                # skip malformed entries
+                continue
+
+        # atomic write: write to tmp then replace
+        tmp_path = path + '.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as fh:
+            json.dump({'timestamp': int(time.time()), 'trains': serial}, fh, ensure_ascii=False)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, path)
+    except Exception as e:
+        print(f"Error writing latest trains to file: {e}")
+
 #Example Main, usually and in proprer use the AI will have to properly use the function get_train_data
 #so the AI wil get a list of object every 30 seconds
 if __name__ == "__main__":
@@ -89,6 +154,11 @@ if __name__ == "__main__":
             for train in train_list:
                 #Pito to know the information of each train
                 print(train)
+            # write the latest trains to disk so other processes (map server) can use them
+            try:
+                write_trains_to_file(train_list)
+            except Exception as e:
+                print(f"Error saving latest trains: {e}")
         else:
             print("No train data found.")
         
