@@ -9,12 +9,18 @@ import time
 import random
 import unicodedata
 import folium
+import osmnx as ox
+from geopy.distance import great_circle
 
+#TODO: REPASSAR AIXÒ
+ox.settings.log_console = True
+ox.settings.use_cache = True
+ox.settings.timeout = 900 #timeout of 900 seconds if the download crashes
+# -----------------------------------------------
 
 def _normalize_name(name):
-    
+    #Normaliztion of all the names from csv, to upper, no accents, no special characters neither spaces
     normalized_name = name.lower()
-    #Remove special characters
     normalized_name = normalized_name.replace(' ', '')
     normalized_name = normalized_name.replace('-', '')
     normalized_name = normalized_name.replace("'", '')
@@ -23,7 +29,6 @@ def _normalize_name(name):
 
     normalized_name = normalized_name.replace('ç', 'c')
     
-    #we're eliminatign the accents
     normalized_name = unicodedata.normalize('NFD', normalized_name)
     
     final_name = "".join(
@@ -55,8 +60,10 @@ data.columns = [col.upper().strip().replace('Ó', 'O') for col in data.columns] 
 
 #Helper to parse malformed coordinate strings found in the CSV.
 def _parse_coord(raw, is_lat=True):
-    
-    #Handle explicit missing / NaN values
+    '''
+    This function is made to parse malformed coordinate strings found in the CSV.
+    We found the source of the document wasn't relaible, so we had to ensure the proper structure of the data
+    '''
     if raw is None or (isinstance(raw, (float, np.floating)) and (np.isnan(raw) or math.isnan(raw))):
         return None
 
@@ -64,7 +71,7 @@ def _parse_coord(raw, is_lat=True):
     if not s:
         return None
 
-    s = s.replace('\u2212', '-')
+    s = s.replace('−', '-')
 
     #We have stablished that the coordinates are in europe format, so commas are decimals
     #and a 2 attempts method toprevent errors we had previosult
@@ -100,7 +107,8 @@ def _parse_coord(raw, is_lat=True):
     divisors = [1, 10, 100, 1000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000]
     candidates = [n / d for d in divisors]
 
-    #Strict ranges chosen for Barcelona area (helps disambiguate scaling)
+    #TODO: REPASSAR AIXÒ A VEURE SI HO PODEM TREURE POTSER ESTEM SOBRECOMPLICANT-HO
+    #Strict ranges chosen for Barcelona area, this was made to prevent an error where half the coordinates were pointing Italy
     if is_lat:
         strict_min, strict_max, expected = 30.0, 50.0, 41.38
     else:
@@ -109,8 +117,7 @@ def _parse_coord(raw, is_lat=True):
     strict_hits = [c for c in candidates if strict_min <= c <= strict_max]
     if strict_hits:
         return float(min(strict_hits, key=lambda x: abs(x - expected)))
-
-    #Broader fallback (valid geographic bounds)
+    
     if is_lat:
         broad_min, broad_max = -90.0, 90.0
     else:
@@ -127,22 +134,94 @@ data['LATITUD'] = data.get('LATITUD').apply(lambda v: _parse_coord(v, is_lat=Tru
 data['LONGITUD'] = data.get('LONGITUD').apply(lambda v: _parse_coord(v, is_lat=False))
 
 
-def haversine_distance(lat1, lon1, lat2, lon2):
-    '''
-    We did not found real information about the rails distance between stations, so we decdided
-    to use the haversine formula to estimate the distance between two stations based on their coordinates.
-    '''
-    if None in [lat1, lon1, lat2, lon2] or any(math.isnan(x) for x in [lat1, lon1, lat2, lon2]):
-        # Return a placeholder distance (e.g., 1 km) or raise an exception
-        # Returning a placeholder allows the graph to form, but the cost is inaccurate.
-        return 1.0 # Defaulting to 1 km if coordinates are missing/invalid
-        
-    R = 6371  # Earth's radius in km
-    d_lat = math.radians(lat2 - lat1)
-    d_lon = math.radians(lon2 - lon1)
-    a = math.sin(d_lat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+#The data of the coordinates is beign used in different formats, #so we store the rail network graph globally to avoid re-downloading or re-projecting it multiple times.
+RAIL_NETWORK_GRAPH_WGS = None
+RAIL_NETWORK_GRAPH_PROJ = None
+
+def get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False):
+    """
+    This function is due to calculate the rail distance between two stations
+    In a way were using the Harvesine distance between all the rail_nodes between two stations
+    """
+
+    if None in [lat1, lon1, lat2, lon2] or any(isinstance(x, float) and math.isnan(x) for x in [lat1, lon1, lat2, lon2]):
+        if debug: print("Warning: Missing coordinate data for distance calculation.")
+        return 9999.0
+
+    try:
+        sample_node = next(iter(rail_graph_wgs.nodes))
+        sample_attrs = rail_graph_wgs.nodes[sample_node]
+        sample_x = sample_attrs.get('x', sample_attrs.get('lon', None))
+        sample_y = sample_attrs.get('y', sample_attrs.get('lat', None))
+        if sample_x is None or sample_y is None:
+            if debug: print("Graph node missing 'x'/'y' or 'lon'/'lat' attributes — can't proceed reliably.")
+        else:
+            if not (-90.0 <= sample_y <= 90.0 and -180.0 <= sample_x <= 180.0):
+                if debug:
+                    print("Warning: Provided rail_graph appears to be projected (x/y not lon/lat).")
+                    print("  sample_x, sample_y:", sample_x, sample_y)
+    except StopIteration:
+        if debug: print("Rail graph empty.")
+        return great_circle((lat1, lon1), (lat2, lon2)).km
+
+    try:
+        #we look for teh nearest node, and we calculate the shortest path between them
+        orig_node = ox.nearest_nodes(rail_graph_wgs, lon1, lat1)
+        dest_node = ox.nearest_nodes(rail_graph_wgs, lon2, lat2)
+        if debug:
+            print("orig_node, dest_node:", orig_node, dest_node)
+
+        #we use weight='length' when available to prefer realistic rail routing:
+        try:
+            shortest_path = ox.shortest_path(rail_graph_wgs, orig_node, dest_node, weight='length')
+        except Exception:
+            shortest_path = ox.shortest_path(rail_graph_wgs, orig_node, dest_node)
+
+        if shortest_path is None or len(shortest_path) == 0:
+            if debug: print(f"No path between {orig_node} and {dest_node}")
+            return great_circle((lat1, lon1), (lat2, lon2)).km
+
+        if debug:
+            print("shortest_path length (nodes):", len(shortest_path))
+            print("shortest_path sample nodes:", shortest_path[:6])
+
+        #If orig==dest or path of length 1, fallback
+        if orig_node == dest_node or len(shortest_path) <= 1:
+            if debug: print("Origin and destination collapsed to same node — falling back to great_circle")
+            return great_circle((lat1, lon1), (lat2, lon2)).km
+
+        total_km = 0.0
+        for u, v in zip(shortest_path[:-1], shortest_path[1:]):
+            node_u = rail_graph_wgs.nodes[u]
+            node_v = rail_graph_wgs.nodes[v]
+
+            #Get lat/lon robustly
+            lon_u = node_u.get('x', node_u.get('lon', None))
+            lat_u = node_u.get('y', node_u.get('lat', None))
+            lon_v = node_v.get('x', node_v.get('lon', None))
+            lat_v = node_v.get('y', node_v.get('lat', None))
+
+            #If any of these are None, abort and fallback
+            if None in (lat_u, lon_u, lat_v, lon_v):
+                if debug: print(f"Missing coords for nodes {u} or {v}, falling back to great_circle on station coords.")
+                return great_circle((lat1, lon1), (lat2, lon2)).km
+
+            if not (-90 <= lat_u <= 90 and -90 <= lat_v <= 90 and -180 <= lon_u <= 180 and -180 <= lon_v <= 180):
+                if debug:
+                    print(f"Coords look projected for nodes {u}/{v}: {(lon_u, lat_u)} -> {(lon_v, lat_v)}")
+                    print("Falling back to great_circle on station coords.")
+                return great_circle((lat1, lon1), (lat2, lon2)).km
+
+            total_km += great_circle((lat_u, lon_u), (lat_v, lon_v)).km
+
+        if debug: print(f"Total distance via nodes: {total_km:.4f} km")
+        if total_km < 0.05 and debug:
+            print("WARNING: computed total_km < 0.05 km — verify that the rail_graph is correct and unprojected.")
+        return total_km
+
+    except Exception as e:
+        if debug: print(f"Error calculating geographic rail distance: {e}. Falling back to great_circle.")
+        return great_circle((lat1, lon1), (lat2, lon2)).km
 
 
 print("Data shape:", data.shape)
@@ -161,20 +240,56 @@ for index, row in data.iterrows():
     norm_name = _normalize_name(station_name)
     print(f"Processing station: Name={norm_name}")
 
-    # Add node keyed by normalized name, even if coordinates are invalid.
+    #Add node keyed by normalized name, even if coordinates are invalid.
     G.add_node(norm_name, id=station_id, name=station_name, lat=lat, lon=lon)
 
 print(f"Finished adding {G.number_of_nodes()} stations as nodes.")
 
 
-def add_rail_connections(graph: nx.Graph, connections: list):
+'''
+Downloaf all the cache files, with the rail_nodes information
+'''
+PLACE_NAME = "Catalonia, Spain" 
+
+print(f"Downloading rail network data for {PLACE_NAME} (Timeout set to 15 mins)...")
+
+try:
+    rail_graph_wgs = ox.graph_from_place(PLACE_NAME, network_type='all', retain_all=False,  custom_filter='["railway"~"rail|station|subway|light_rail"]')
+    #keep WGS graph for nearest_nodes and Haversine calculations
+    RAIL_NETWORK_GRAPH_WGS = rail_graph_wgs
+    try:
+        RAIL_NETWORK_GRAPH_PROJ = ox.project_graph(rail_graph_wgs)
+    except Exception as e:
+        RAIL_NETWORK_GRAPH_PROJ = None
+        print("Could not project graph (non-fatal):", e)
+
+    print(" Download completed.")
+
+#WE SHOULD NEVER GET INTO AN EXCEPTION HERE BUT JUST IN CASE
+except Exception as e:
+    print(f" Failed downloafidns: {e}")
+    print("❌ Cannot download rail network: Insufficient valid station coordinates for BBox.")
+    RAIL_NETWORK_GRAPH_WGS = None
+    RAIL_NETWORK_GRAPH_PROJ = None
+        
+    
+#debug of teh downaloaded data
+if RAIL_NETWORK_GRAPH_WGS is not None:
+    crs = RAIL_NETWORK_GRAPH_WGS.graph.get('crs')
+    print("Rail graph", crs)
+    try:
+        sample_node = next(iter(RAIL_NETWORK_GRAPH_WGS.nodes))
+        print("Sample node attrs:", RAIL_NETWORK_GRAPH_WGS.nodes[sample_node])
+    except Exception as e:
+        print("Could not inspect sample node:", e)
+
+def add_rail_connections(graph: nx.Graph, connections: list, rail_graph_wgs: nx.MultiDiGraph):
     """
     Adds the connection between all the nodes
-    the graph is created and filled with all the sattions, this function will add the edges
-    the edges have the two nodes and the distacne in the parameters
+    the graph is created and filled with all the stations, this function will add the edges
+    the edges have the two nodes and the distance in the parameters
     """
     added_edges_count = 0 #to keep track of the number of edges added
-    #Use the unified normalization function
     _norm_conn_name = _normalize_name 
 
     for station1, station2 in connections:
@@ -186,218 +301,231 @@ def add_rail_connections(graph: nx.Graph, connections: list):
             lat1, lon1 = graph.nodes[n1]['lat'], graph.nodes[n1]['lon']
             lat2, lon2 = graph.nodes[n2]['lat'], graph.nodes[n2]['lon']
             
-            #distance between stations, 1.0 by default
-            distance = haversine_distance(lat1, lon1, lat2, lon2)
             
-            graph.add_edge(n1, n2, distance_km=distance)
-            added_edges_count += 1
+            #Calculate the rail track distance
+            if rail_graph_wgs:
+                distance = get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False)
+            else:
+                print("Damn that's some thought shit man, I don't know what to do right now.")
+            
+            #only distance =0 when is a junction of the nodes
+            if distance > 0:
+                graph.add_edge(n1, n2, distance_km=distance)
+                added_edges_count += 1
+                #TODO: JO PER MI QUE TOT AIXO ES POT TREURE ESTA FICAT PER FERE COMPROVACIONS PERO NO CAL
+            else:
+                #add the edge if a physical connection is implied by the Rodalies list, 
+                 if n1 != n2:
+                     graph.add_edge(n1, n2, distance_km=0.01) #use a very small distance
+                     added_edges_count += 1
         else:
             #edbug
             print(f"Warning: Station '{station1}' (norm '{n1}') or '{station2}' (norm '{n2}') not found in the graph.")
             
-    print(f"\nSuccessfully added {added_edges_count} edges from the connection list.")
+    print(f"Successfully added {added_edges_count} edges from the connection list.")
     return graph
 
-#Odio la rnfe tio, mireu que he hagut de fer perque la renfe no sap escriure be les estacions
+#Odio la renfe tio, mireu que he hagut de fer perque la renfe no sap escriure be les estacions
 r1_connections = [
-  ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'),
-  ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
-  ('SANTJOANDESPI', 'CORNELLA'),
-  ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
-  ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'PLACADECATALUNYA'),
-  ('PLACADECATALUNYA', 'ARCDETRIOMF'),
-  ('ARCDETRIOMF', 'BARCELONACLOTARAGO'),
-  ('BARCELONACLOTARAGO', 'SANTADRIADEBESOS'),
-  ('SANTADRIADEBESOS', 'BADALONA'),
-  ('BADALONA', 'MONTGAT'),
-  ('MONTGAT', 'MONTGATNORD'),
-  ('MONTGATNORD', 'ELMASNOU'),
-  ('ELMASNOU', 'OCATA'),
-  ('OCATA', 'PREMIADEMAR'),
-  ('PREMIADEMAR', 'VILASSARDEMAR'),
-  ('VILASSARDEMAR', 'CABRERADEMARVILASSARDEMAR'),
-  ('CABRERADEMARVILASSARDEMAR', 'MATARO'),
-  ('MATARO', 'SANTANDREUDELLAVANERES'),
-  ('SANTANDREUDELLAVANERES', 'CALDESDESTRAC'),
-  ('CALDESDESTRAC', 'ARENYSDEMAR'), 
-  ('ARENYSDEMAR', 'CANETDEMAR'),
-  ('CANETDEMAR', 'SANTPOLDEMAR'), 
-  ('SANTPOLDEMAR', 'CALELLA'),
-  ('CALELLA', 'PINEDADEMAR'),
-  ('PINEDADEMAR', 'SANTASUSANNA'),
-  ('SANTASUSANNA', 'MALGRATDEMAR'),
-  ('MALGRATDEMAR', 'BLANES'),
-  ('BLANES', 'TORDERA'),
-  ('TORDERA', 'MACANETMASSANES')
+    ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'),
+    ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
+    ('SANTJOANDESPI', 'CORNELLA'),
+    ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
+    ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'PLACADECATALUNYA'),
+    ('PLACADECATALUNYA', 'ARCDETRIOMF'),
+    ('ARCDETRIOMF', 'BARCELONACLOTARAGO'),
+    ('BARCELONACLOTARAGO', 'SANTADRIADEBESOS'),
+    ('SANTADRIADEBESOS', 'BADALONA'),
+    ('BADALONA', 'MONTGAT'),
+    ('MONTGAT', 'MONTGATNORD'),
+    ('MONTGATNORD', 'ELMASNOU'),
+    ('ELMASNOU', 'OCATA'),
+    ('OCATA', 'PREMIADEMAR'),
+    ('PREMIADEMAR', 'VILASSARDEMAR'),
+    ('VILASSARDEMAR', 'CABRERADEMARVILASSARDEMAR'),
+    ('CABRERADEMARVILASSARDEMAR', 'MATARO'),
+    ('MATARO', 'SANTANDREUDELLAVANERES'),
+    ('SANTANDREUDELLAVANERES', 'CALDESDESTRAC'),
+    ('CALDESDESTRAC', 'ARENYSDEMAR'), 
+    ('ARENYSDEMAR', 'CANETDEMAR'),
+    ('CANETDEMAR', 'SANTPOLDEMAR'), 
+    ('SANTPOLDEMAR', 'CALELLA'),
+    ('CALELLA', 'PINEDADEMAR'),
+    ('PINEDADEMAR', 'SANTASUSANNA'),
+    ('SANTASUSANNA', 'MALGRATDEMAR'),
+    ('MALGRATDEMAR', 'BLANES'),
+    ('BLANES', 'TORDERA'),
+    ('TORDERA', 'MACANETMASSANES')
 ];
 r2_connections = [
-  ('CASTELLDEFELS', 'GAVA'),
-  ('GAVA', 'VILADECANS'),
-  ('VILADECANS', 'ELPRATDELLOBREGAT'),
-  ('ELPRATDELLOBREGAT', 'BELLVITGE'),
-  ('BELLVITGE', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
-  ('BARCELONAPASSEIGDEGRACIA', 'BARCELONACLOTARAGO'),
-  ('BARCELONACLOTARAGO', 'BARCELONASANTANDREUCOMTAL'),
-  ('BARCELONASANTANDREUCOMTAL', 'MONTCADAIREIXAC'),
-  ('MONTCADAIREIXAC', 'LALLAGOSTA'),
-  ('LALLAGOSTA', 'MOLLETSANTFOST'),
-  ('MOLLETSANTFOST', 'MONTMELO'),
-  ('MONTMELO', 'GRANOLLERSCENTRE')
+    ('CASTELLDEFELS', 'GAVA'),
+    ('GAVA', 'VILADECANS'),
+    ('VILADECANS', 'ELPRATDELLOBREGAT'),
+    ('ELPRATDELLOBREGAT', 'BELLVITGE'),
+    ('BELLVITGE', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
+    ('BARCELONAPASSEIGDEGRACIA', 'BARCELONACLOTARAGO'),
+    ('BARCELONACLOTARAGO', 'BARCELONASANTANDREUCOMTAL'),
+    ('BARCELONASANTANDREUCOMTAL', 'MONTCADAIREIXAC'),
+    ('MONTCADAIREIXAC', 'LALLAGOSTA'),
+    ('LALLAGOSTA', 'MOLLETSANTFOST'),
+    ('MOLLETSANTFOST', 'MONTMELO'),
+    ('MONTMELO', 'GRANOLLERSCENTRE')
 ];
 r2N_connections = [
-  ('AEROPORT', 'ELPRATDELLOBREGAT'),
-  ('ELPRATDELLOBREGAT', 'BELLVITGE'),
-  ('BELLVITGE', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
-  ('BARCELONAPASSEIGDEGRACIA', 'BARCELONACLOTARAGO'),
-  ('BARCELONACLOTARAGO', 'BARCELONASANTANDREUCOMTAL'),
-  ('BARCELONASANTANDREUCOMTAL', 'MONTCADAIREIXAC'),
-  ('MONTCADAIREIXAC', 'LALLAGOSTA'),
-  ('LALLAGOSTA', 'MOLLETSANTFOST'),
-  ('MOLLETSANTFOST', 'MONTMELO'),
-  ('MONTMELO', 'GRANOLLERSCENTRE'),
-  ('GRANOLLERSCENTRE', 'LESFRANQUESESGRANOLLERSNORD'),
-  ('LESFRANQUESESGRANOLLERSNORD', 'CARDEDEU'),
-  ('CARDEDEU', 'LLINARSDELVALLES'),
-  ('LLINARSDELVALLES', 'PALAUTORDERA'),
-  ('PALAUTORDERA', 'SANTCELONI'),
-  ('SANTCELONI', 'GUALBA'),
-  ('GUALBA', 'RIELLSIVIABREABREDA'),
-  ('RIELLSIVIABREABREDA', 'HOSTALRIC'),
-  ('HOSTALRIC', 'MACANETMASSANES')
+    ('AEROPORT', 'ELPRATDELLOBREGAT'),
+    ('ELPRATDELLOBREGAT', 'BELLVITGE'),
+    ('BELLVITGE', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
+    ('BARCELONAPASSEIGDEGRACIA', 'BARCELONACLOTARAGO'),
+    ('BARCELONACLOTARAGO', 'BARCELONASANTANDREUCOMTAL'),
+    ('BARCELONASANTANDREUCOMTAL', 'MONTCADAIREIXAC'),
+    ('MONTCADAIREIXAC', 'LALLAGOSTA'),
+    ('LALLAGOSTA', 'MOLLETSANTFOST'),
+    ('MOLLETSANTFOST', 'MONTMELO'),
+    ('MONTMELO', 'GRANOLLERSCENTRE'),
+    ('GRANOLLERSCENTRE', 'LESFRANQUESESGRANOLLERSNORD'),
+    ('LESFRANQUESESGRANOLLERSNORD', 'CARDEDEU'),
+    ('CARDEDEU', 'LLINARSDELVALLES'),
+    ('LLINARSDELVALLES', 'PALAUTORDERA'),
+    ('PALAUTORDERA', 'SANTCELONI'),
+    ('SANTCELONI', 'GUALBA'),
+    ('GUALBA', 'RIELLSIVIABREABREDA'),
+    ('RIELLSIVIABREABREDA', 'HOSTALRIC'),
+    ('HOSTALRIC', 'MACANETMASSANES')
 ];
 r2S_connections = [
-  ('SANTVICENCDECALDERS', 'CALAFELL'),
-  ('CALAFELL', 'SEGURDECALAFELL'),
-  ('SEGURDECALAFELL', 'CUNIT'),
-  ('CUNIT', 'CUBELLES'),
-  ('CUBELLES', 'VILANOVAILAGELTRU'),
-  ('VILANOVAILAGELTRU', 'SITGES'),
-  ('SITGES', 'GARRAF'),
-  ('GARRAF', 'PLATJADECASTELLDEFELS'),
-  ('PLATJADECASTELLDEFELS', 'CASTELLDEFELS'),
-  ('CASTELLDEFELS', 'GAVA'),
-  ('GAVA', 'VILADECANS'),
-  ('VILADECANS', 'ELPRATDELLOBREGAT'),
-  ('ELPRATDELLOBREGAT', 'BELLVITGE'),
-  ('BELLVITGE', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
-  ('BARCELONAPASSEIGDEGRACIA', 'BARCELONAESTACIODEFRANCA')
+    ('SANTVICENCDECALDERS', 'CALAFELL'),
+    ('CALAFELL', 'SEGURDECALAFELL'),
+    ('SEGURDECALAFELL', 'CUNIT'),
+    ('CUNIT', 'CUBELLES'),
+    ('CUBELLES', 'VILANOVAILAGELTRU'),
+    ('VILANOVAILAGELTRU', 'SITGES'),
+    ('SITGES', 'GARRAF'),
+    ('GARRAF', 'PLATJADECASTELLDEFELS'),
+    ('PLATJADECASTELLDEFELS', 'CASTELLDEFELS'),
+    ('CASTELLDEFELS', 'GAVA'),
+    ('GAVA', 'VILADECANS'),
+    ('VILADECANS', 'ELPRATDELLOBREGAT'),
+    ('ELPRATDELLOBREGAT', 'BELLVITGE'),
+    ('BELLVITGE', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'BARCELONAPASSEIGDEGRACIA'),
+    ('BARCELONAPASSEIGDEGRACIA', 'BARCELONAESTACIODEFRANCA')
 ];
 r3_connections = [
-  ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'PLACADECATALUNYA'),
-  ('PLACADECATALUNYA', 'ARCDETRIOMF'),
-  ('ARCDETRIOMF', 'LASAGRERAMERIDIANA'),
-  ('LASAGRERAMERIDIANA', 'BARCELONAFABRAIPUIG'),
-  ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
-  ('TORREDELBARO', 'MONTCADABIFURCACIO'),
-  ('MONTCADABIFURCACIO', 'MONTCADARIPOLLET'),
-  ('MONTCADARIPOLLET', 'SANTAPERPETUADEMOGODA'),
-  ('SANTAPERPETUADEMOGODA', 'MOLLETSANTAROSA'),
-  ('MOLLETSANTAROSA', 'PARETSDELVALLES'),
-  ('PARETSDELVALLES', 'GRANOLLERSCANOVELLES'),
-  ('GRANOLLERSCANOVELLES', 'LESFRANQUESESDELVALLES'),
-  ('LESFRANQUESESDELVALLES', 'LAGARRIGA'),
-  ('LAGARRIGA', 'FIGARO'),
-  ('FIGARO', 'SANTMARTIDECENTELLES'),
-  ('SANTMARTIDECENTELLES', 'CENTELLES'),
-  ('CENTELLES', 'BALENYAELSHOSTALETS'),
-  ('BALENYAELSHOSTALETS', 'BALENYATONASEVA'),
-  ('BALENYATONASEVA', 'VIC'),
-  ('VIC', 'MANLLEU'),
-  ('MANLLEU', 'TORELLO'),
-  ('TORELLO', 'BORGONYA'),
-  ('BORGONYA', 'SANTQUIRZEDEBESORAMONTESQUIU'),
-  #No hi poden haver mes estacions ens tanquem nomes aservei de rodalies no regionals a la llista cv estan n ho entenc pero els posem igualment
-  ('SANTQUIRZEDEBESORAMONTESQUIU', 'LAFARGADEBEBIE'),
-  ('LAFARGADEBEBIE', 'RIPOLL'),
-  ('RIPOLL', 'CAMPDEVANOL'),
-  ('CAMPDEVANOL', 'RIBESDEFRESER'),
-  ('RIBESDEFRESER', 'PLANOLES'), 
-  ('PLANOLES', 'TOSES'),
-  ('TOSES', 'LAMOLINA'),
-  ('LAMOLINA', 'URTXALP'),
-  ('URTXALP', 'PUIGCERDA'), 
+    ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'PLACADECATALUNYA'),
+    ('PLACADECATALUNYA', 'ARCDETRIOMF'),
+    ('ARCDETRIOMF', 'LASAGRERAMERIDIANA'),
+    ('LASAGRERAMERIDIANA', 'BARCELONAFABRAIPUIG'),
+    ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
+    ('TORREDELBARO', 'MONTCADABIFURCACIO'),
+    ('MONTCADABIFURCACIO', 'MONTCADARIPOLLET'),
+    ('MONTCADARIPOLLET', 'SANTAPERPETUADEMOGODA'),
+    ('SANTAPERPETUADEMOGODA', 'MOLLETSANTAROSA'),
+    ('MOLLETSANTAROSA', 'PARETSDELVALLES'),
+    ('PARETSDELVALLES', 'GRANOLLERSCANOVELLES'),
+    ('GRANOLLERSCANOVELLES', 'LESFRANQUESESDELVALLES'),
+    ('LESFRANQUESESDELVALLES', 'LAGARRIGA'),
+    ('LAGARRIGA', 'FIGARO'),
+    ('FIGARO', 'SANTMARTIDECENTELLES'),
+    ('SANTMARTIDECENTELLES', 'CENTELLES'),
+    ('CENTELLES', 'BALENYAELSHOSTALETS'),
+    ('BALENYAELSHOSTALETS', 'BALENYATONASEVA'),
+    ('BALENYATONASEVA', 'VIC'),
+    ('VIC', 'MANLLEU'),
+    ('MANLLEU', 'TORELLO'),
+    ('TORELLO', 'BORGONYA'),
+    ('BORGONYA', 'SANTQUIRZEDEBESORAMONTESQUIU'),
+    #No hi poden haver mes estacions ens tanquem nomes aservei de rodalies no regionals a la llista cv estan n ho entenc pero els posem igualment
+    ('SANTQUIRZEDEBESORAMONTESQUIU', 'LAFARGADEBEBIE'),
+    ('LAFARGADEBEBIE', 'RIPOLL'),
+    ('RIPOLL', 'CAMPDEVANOL'),
+    ('CAMPDEVANOL', 'RIBESDEFRESER'),
+    ('RIBESDEFRESER', 'PLANOLES'), 
+    ('PLANOLES', 'TOSES'),
+    ('TOSES', 'LAMOLINA'),
+    ('LAMOLINA', 'URTXALP'),
+    ('URTXALP', 'PUIGCERDA'), 
 ];
 r4_connections = [
-  ('SANTVICENCDECALDERS', 'ELVENDRELL'),
-  ('ELVENDRELL', 'LARBOC'),
-  ('LARBOC', 'ELSMONJOS'),
-  ('ELSMONJOS', 'VILAFRANCADELPENEDES'),
-  ('VILAFRANCADELPENEDES', 'LAGRANADA'),
-  ('LAGRANADA', 'LAVERNSUBIRATS'),
-  ('LAVERNSUBIRATS', 'SANTSADURNIDANOIA'),
-  ('SANTSADURNIDANOIA', 'GELIDA'),
-  ('GELIDA', 'MARTORELL'),
-  ('MARTORELL', 'CASTELLBISBAL'),
-  ('CASTELLBISBAL', 'ELPAPIOL'),
-  ('ELPAPIOL', 'MOLINSDEREI'), 
-  ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'),
-  ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
-  ('SANTJOANDESPI', 'CORNELLA'),
-  ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
-  ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
-  ('BARCELONASANTS', 'PLACADECATALUNYA'),
-  ('PLACADECATALUNYA', 'ARCDETRIOMF'),
-  ('ARCDETRIOMF', 'LASAGRERAMERIDIANA'),
-  ('LASAGRERAMERIDIANA', 'BARCELONAFABRAIPUIG'),
-  ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
-  ('TORREDELBARO', 'MONTCADABIFURCACIO'),
-  ('MONTCADABIFURCACIO', 'MONTCADAIREIXACMANRESA'),
-  ('MONTCADAIREIXACMANRESA', 'MONTCADAIREIXACSANTAMARIA'),
-  ('MONTCADAIREIXACSANTAMARIA', 'CERDANYOLADELVALLES'),
-  ('CERDANYOLADELVALLES', 'BARBERADELVALLES'),
-  ('BARBERADELVALLES', 'SABADELLSUD'),
-  ('SABADELLSUD', 'SABADELLCENTRE'),
-  ('SABADELLCENTRE', 'SABADELLNORD'),
-  ('SABADELLNORD', 'TERRASSAEST'),
-  ('TERRASSAEST', 'TERRASSA'),
-  ('TERRASSA', 'SANTMIQUELDEGONTERES'),
-  ('SANTMIQUELDEGONTERES', 'VILADECAVALLS'),
-  ('VILADECAVALLS', 'VACARISSESTORREBLANCA'),
-  ('VACARISSESTORREBLANCA', 'VACARISSES'),
-  ('VACARISSES', 'CASTELLBELLIELVILARMONISTROLDEMONTSERRAT'),
-  ('CASTELLBELLIELVILARMONISTROLDEMONTSERRAT', 'SANTVICENCDECASTELLET'),
-  ('SANTVICENCDECASTELLET', 'MANRESA')
+    ('SANTVICENCDECALDERS', 'ELVENDRELL'),
+    ('ELVENDRELL', 'LARBOC'),
+    ('LARBOC', 'ELSMONJOS'),
+    ('ELSMONJOS', 'VILAFRANCADELPENEDES'),
+    ('VILAFRANCADELPENEDES', 'LAGRANADA'),
+    ('LAGRANADA', 'LAVERNSUBIRATS'),
+    ('LAVERNSUBIRATS', 'SANTSADURNIDANOIA'),
+    ('SANTSADURNIDANOIA', 'GELIDA'),
+    ('GELIDA', 'MARTORELL'),
+    ('MARTORELL', 'CASTELLBISBAL'),
+    ('CASTELLBISBAL', 'ELPAPIOL'),
+    ('ELPAPIOL', 'MOLINSDEREI'), 
+    ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'),
+    ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
+    ('SANTJOANDESPI', 'CORNELLA'),
+    ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
+    ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'),
+    ('BARCELONASANTS', 'PLACADECATALUNYA'),
+    ('PLACADECATALUNYA', 'ARCDETRIOMF'),
+    ('ARCDETRIOMF', 'LASAGRERAMERIDIANA'),
+    ('LASAGRERAMERIDIANA', 'BARCELONAFABRAIPUIG'),
+    ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
+    ('TORREDELBARO', 'MONTCADABIFURCACIO'),
+    ('MONTCADABIFURCACIO', 'MONTCADAIREIXACMANRESA'),
+    ('MONTCADAIREIXACMANRESA', 'MONTCADAIREIXACSANTAMARIA'),
+    ('MONTCADAIREIXACSANTAMARIA', 'CERDANYOLADELVALLES'),
+    ('CERDANYOLADELVALLES', 'BARBERADELVALLES'),
+    ('BARBERADELVALLES', 'SABADELLSUD'),
+    ('SABADELLSUD', 'SABADELLCENTRE'),
+    ('SABADELLCENTRE', 'SABADELLNORD'),
+    ('SABADELLNORD', 'TERRASSAEST'),
+    ('TERRASSAEST', 'TERRASSA'),
+    ('TERRASSA', 'SANTMIQUELDEGONTERES'),
+    ('SANTMIQUELDEGONTERES', 'VILADECAVALLS'),
+    ('VILADECAVALLS', 'VACARISSESTORREBLANCA'),
+    ('VACARISSESTORREBLANCA', 'VACARISSES'),
+    ('VACARISSES', 'CASTELLBELLIELVILARMONISTROLDEMONTSERRAT'),
+    ('CASTELLBELLIELVILARMONISTROLDEMONTSERRAT', 'SANTVICENCDECASTELLET'),
+    ('SANTVICENCDECASTELLET', 'MANRESA')
 ];
 r7_connections = [
-  ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
-  ('TORREDELBARO', 'MONTCADABIFURCACIO'),
-  ('MONTCADABIFURCACIO', 'MONTCADAIREIXACMANRESA'),
-  ('MONTCADAIREIXACMANRESA', 'MONTCADAIREIXACSANTAMARIA'),
-  ('MONTCADAIREIXACSANTAMARIA', 'CERDANYOLADELVALLES'),
-  ('CERDANYOLADELVALLES', 'CERDANYOLAUNIVERSITAT')
+    ('BARCELONAFABRAIPUIG', 'TORREDELBARO'),
+    ('TORREDELBARO', 'MONTCADABIFURCACIO'),
+    ('MONTCADABIFURCACIO', 'MONTCADAIREIXACMANRESA'),
+    ('MONTCADAIREIXACMANRESA', 'MONTCADAIREIXACSANTAMARIA'),
+    ('MONTCADAIREIXACSANTAMARIA', 'CERDANYOLADELVALLES'),
+    ('CERDANYOLADELVALLES', 'CERDANYOLAUNIVERSITAT')
 ];
 r8_connections = [
-  ('MARTORELL', 'CASTELLBISBAL'),
-  ('CASTELLBISBAL', 'RUBI'),
-  ('RUBI', 'SANTCUGATDELVALLES'),
-  ('SANTCUGATDELVALLES', 'CERDANYOLAUNIVERSITAT'),
-  ('CERDANYOLAUNIVERSITAT', 'SANTAPERPETUADEMOGODA'),
-  ('SANTAPERPETUADEMOGODA', 'MOLLETSANTFOST'),
-  ('MOLLETSANTFOST', 'MONTMELO'),
-  ('MONTMELO', 'GRANOLLERSCENTRE')
+    ('MARTORELL', 'CASTELLBISBAL'),
+    ('CASTELLBISBAL', 'RUBI'),
+    ('RUBI', 'SANTCUGATDELVALLES'),
+    ('SANTCUGATDELVALLES', 'CERDANYOLAUNIVERSITAT'),
+    ('CERDANYOLAUNIVERSITAT', 'SANTAPERPETUADEMOGODA'),
+    ('SANTAPERPETUADEMOGODA', 'MOLLETSANTFOST'),
+    ('MOLLETSANTFOST', 'MONTMELO'),
+    ('MONTMELO', 'GRANOLLERSCENTRE')
 ]
-G = add_rail_connections(G, r1_connections)
-G = add_rail_connections(G, r2_connections)
-G = add_rail_connections(G, r2N_connections)
-G = add_rail_connections(G, r2S_connections)
-G = add_rail_connections(G, r3_connections)
-G = add_rail_connections(G, r4_connections)
-G = add_rail_connections(G, r7_connections)
-G = add_rail_connections(G, r8_connections)
+
+G = add_rail_connections(G, r1_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r2_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r2N_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r2S_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r3_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r4_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r7_connections, RAIL_NETWORK_GRAPH_WGS)
+G = add_rail_connections(G, r8_connections, RAIL_NETWORK_GRAPH_WGS)
 
 print(f"Number of nodes (stations): {G.number_of_nodes()}")
 print(f"Number of edges (connections): {G.number_of_edges()}")
 
-print("\nNodes and example attributes (ID included):")
+print("Nodes and example attributes (ID included):")
 for i, node in enumerate(list(G.nodes)[:3]):
     print(f"Node: {node}, Attribute: {G.nodes[node]}")
 
-print("\nEdges and their example attributes:")
+print("Edges and their example attributes:")
 for i, edge in enumerate(list(G.edges(data=True))[:3]):
     print(f"Edge: {edge[0]} -> {edge[1]}, Attributes: {edge[2]}")
 
@@ -406,16 +534,13 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
     """
     using the folium library to create an interactive map of the rail network.
     This map will display stations as markers and connections as lines.
-    Args:
-        graph (nx.Graph): The network graph with 'lat' and 'lon' attributes.
-        output_filename (str): Name of the HTML file to save the map to.
     """
         
-    # Collect valid coordinates from the graph
+    #Collect valid coordinates from the graph
     latitudes = [data['lat'] for _, data in graph.nodes(data=True)
-                if data.get('lat') is not None and not (isinstance(data.get('lat'), float) and math.isnan(data.get('lat')))]
+                 if data.get('lat') is not None and not (isinstance(data.get('lat'), float) and math.isnan(data.get('lat')))]
     longitudes = [data['lon'] for _, data in graph.nodes(data=True)
-                if data.get('lon') is not None and not (isinstance(data.get('lon'), float) and math.isnan(data.get('lon')))]
+                 if data.get('lon') is not None and not (isinstance(data.get('lon'), float) and math.isnan(data.get('lon')))]
 
     if not latitudes or not longitudes:
         print("Error: No valid coordinates found to create a geographic map.")
@@ -426,17 +551,15 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
     min_lat = float(np.min(latitudes))
     min_lon = float(np.min(longitudes))
 
-    # Create a folium map WITHOUT default tiles so we can add layers (OSM, OpenRailwayMap, CartoDB)
     m = folium.Map(location=[(min_lat + max_lat) / 2, (min_lon + max_lon) / 2], zoom_start=8, tiles=None)
 
-    # Base layers: OpenStreetMap and CartoDB
     folium.TileLayer('OpenStreetMap', name='OpenStreetMap').add_to(m)
-    folium.TileLayer('CartoDB Positron', name='CartoDB Positron').add_to(m)
+    folium.TileLayer('CartoDB Positron', name='CartoDB Positro n').add_to(m)
 
-    # OpenRailwayMap as an overlay to highlight rail infrastructure
     orm_tiles = 'https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png'
     folium.TileLayer(tiles=orm_tiles, attr='OpenRailwayMap', name='OpenRailwayMap', overlay=True, control=True).add_to(m)
-
+    
+    
     station_group = folium.FeatureGroup(name="Rodalies Stations").add_to(m)
     
     #adding the nodes
@@ -465,12 +588,12 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
         lat_v, lon_v = graph.nodes[v].get('lat'), graph.nodes[v].get('lon')
         distance = edge_data.get('distance_km', None)
 
-        # Ensure coordinates are valid numbers
+        #Ensure coordinates are valid numbers
         if None not in (lat_u, lon_u, lat_v, lon_v) and not any(isinstance(c, float) and math.isnan(c) for c in (lat_u, lon_u, lat_v, lon_v)):
             points = [(lat_u, lon_u), (lat_v, lon_v)]
             tooltip = f"Tram: {u} - {v}"
             if distance is not None and isinstance(distance, (int, float)):
-                tooltip += f" distance: {distance:.2f} km"
+                tooltip += f" Rail Distance: {distance:.2f} km"
             folium.PolyLine(
                 points,
                 color='gray',
@@ -481,12 +604,12 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
 
     folium.LayerControl().add_to(m)
 
-    # Fit map to bounds of all stations so the background covers Catalunya/area of interest
+    #Fit map to bounds of all stations so the background covers Catalunya/area of interest
     bounds = [[min_lat, min_lon], [max_lat, max_lon]]
     m.fit_bounds(bounds, padding=(50, 50))
 
     m.save(output_filename)
-    print(f"\n✅ Interactive map saved to: {output_filename}\nOpen this file in your browser to view the map.")
+    print(f"✅ Interactive map saved to: {output_filename}Open this file in your browser to view the map.")
 
 if __name__ == "__main__":
     visualize_rail_graph(G)
