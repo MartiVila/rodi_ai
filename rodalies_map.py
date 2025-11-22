@@ -5,8 +5,6 @@ import networkx as nx
 import math
 import matplotlib.pyplot as plt
 import re
-import time
-import random
 import unicodedata
 import folium
 import osmnx as ox
@@ -16,9 +14,13 @@ from geopy.distance import great_circle
 ox.settings.log_console = True
 ox.settings.use_cache = True
 ox.settings.timeout = 900 #timeout of 900 seconds if the download crashes
-# -----------------------------------------------
 
 def _normalize_name(name):
+    '''
+    This funciton is made to normalize the station names to be able to match them properly
+    The normaliztion may be overprovident but we want to ensure the names are properly matched
+    cause the source of Renfe Data isn't consistent at all.
+    '''
     #Normaliztion of all the names from csv, to upper, no accents, no special characters neither spaces
     normalized_name = name.lower()
     normalized_name = normalized_name.replace(' ', '')
@@ -30,10 +32,11 @@ def _normalize_name(name):
     normalized_name = normalized_name.replace('ç', 'c')
     
     normalized_name = unicodedata.normalize('NFD', normalized_name)
+    #this line is to ensure al the accents are removes, becoming their stadnard letter with the NFD decoding
     
     final_name = "".join(
         c for c in normalized_name 
-        if unicodedata.category(c) != 'Mn'
+        if unicodedata.category(c) != 'Mn' #Removing accents again
     )
 
     final_name = final_name.upper()#everything must be upper
@@ -43,10 +46,12 @@ file_path = 'data/estaciones_coordenadas.csv'
 #We're reading with two separtors cause the file is big and we don't trust renfe!
 def read_data(path):
     try:
+        #First we try to read it with ;, which would be the correct separator in this case
         return panda.read_csv(path, sep=';', encoding='latin1')
     except Exception:
         pass
     try:
+        #In case a concret line is not separeted with ;
         return panda.read_csv(path, sep=',', encoding='latin1')
     except Exception:
         pass
@@ -63,10 +68,13 @@ def _parse_coord(raw, is_lat=True):
     '''
     This function is made to parse malformed coordinate strings found in the CSV.
     We found the source of the document wasn't relaible, so we had to ensure the proper structure of the data
+    is_lat indicates if we are parsing a latitude (True) or longitude (False), also becuase of the difference between data sources
     '''
+    #Handle explicit missing or NaN values 
     if raw is None or (isinstance(raw, (float, np.floating)) and (np.isnan(raw) or math.isnan(raw))):
         return None
 
+    #We get the string and strip it
     s = str(raw).strip()
     if not s:
         return None
@@ -85,7 +93,7 @@ def _parse_coord(raw, is_lat=True):
                 candidate = s.replace(',', '')
         else:
             candidate = s.replace(',', '.')
-
+        
         v = float(candidate)
         if is_lat and 30.0 <= v <= 50.0:
             return float(v)
@@ -94,7 +102,12 @@ def _parse_coord(raw, is_lat=True):
     except Exception:
         pass
 
-    #Attempt 2: Integer tokens scaled by powers of ten
+    
+    '''
+    THis second attempt is allwatys used
+    The prinicple is to get a integer with all the coordinates, after this it is devided by various multiples od 10,
+    and the code takes the most probable candidate based on ranges
+    '''
     cleaned_digits = re.sub(r"[^0-9-]", "", s)
     if cleaned_digits in ("", "-"):
         return None
@@ -107,7 +120,6 @@ def _parse_coord(raw, is_lat=True):
     divisors = [1, 10, 100, 1000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000]
     candidates = [n / d for d in divisors]
 
-    #TODO: REPASSAR AIXÒ A VEURE SI HO PODEM TREURE POTSER ESTEM SOBRECOMPLICANT-HO
     #Strict ranges chosen for Barcelona area, this was made to prevent an error where half the coordinates were pointing Italy
     if is_lat:
         strict_min, strict_max, expected = 30.0, 50.0, 41.38
@@ -134,42 +146,46 @@ data['LATITUD'] = data.get('LATITUD').apply(lambda v: _parse_coord(v, is_lat=Tru
 data['LONGITUD'] = data.get('LONGITUD').apply(lambda v: _parse_coord(v, is_lat=False))
 
 
-#The data of the coordinates is beign used in different formats, #so we store the rail network graph globally to avoid re-downloading or re-projecting it multiple times.
-RAIL_NETWORK_GRAPH_WGS = None
-RAIL_NETWORK_GRAPH_PROJ = None
+#The data of the coordinates is beign used in different formats, 
+#so we store the rail network graph globally to avoid re-downloading or re-projecting it multiple times.
+RAIL_NETWORK_GRAPH_WGS = None #this one is in greograpgical coordinates
+RAIL_NETWORK_GRAPH_PROJ = None #this one is projected coordinates
 
-def get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False):
+def get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs):
     """
     This function is due to calculate the rail distance between two stations
     In a way were using the Harvesine distance between all the rail_nodes between two stations
+
+    We got a graph with all the medium nodes so now we just need to find where are the stations, and all the node between 2 stations will
+    be used to calculate the distance.
+
+    There may be some error in the caclution, cause of the use of the Haversine function, but it should be minimal.
     """
 
     if None in [lat1, lon1, lat2, lon2] or any(isinstance(x, float) and math.isnan(x) for x in [lat1, lon1, lat2, lon2]):
-        if debug: print("Warning: Missing coordinate data for distance calculation.")
         return 9999.0
 
     try:
         sample_node = next(iter(rail_graph_wgs.nodes))
-        sample_attrs = rail_graph_wgs.nodes[sample_node]
-        sample_x = sample_attrs.get('x', sample_attrs.get('lon', None))
-        sample_y = sample_attrs.get('y', sample_attrs.get('lat', None))
+        sample_cord = rail_graph_wgs.nodes[sample_node]
+        sample_x = sample_cord.get('x', sample_cord.get('lon', None))
+        sample_y = sample_cord.get('y', sample_cord.get('lat', None))
         if sample_x is None or sample_y is None:
-            if debug: print("Graph node missing 'x'/'y' or 'lon'/'lat' attributes — can't proceed reliably.")
+            print("ERROR: Somme coordinates are missing")
         else:
             if not (-90.0 <= sample_y <= 90.0 and -180.0 <= sample_x <= 180.0):
-                if debug:
-                    print("Warning: Provided rail_graph appears to be projected (x/y not lon/lat).")
-                    print("  sample_x, sample_y:", sample_x, sample_y)
+                print("ERROR: rail_graph appears to IS projected with cartessian coordinates not geographical.")
+                print("  sample_x, sample_y:", sample_x, sample_y)
     except StopIteration:
-        if debug: print("Rail graph empty.")
+        print("ERROR: Rail graph empty")
         return great_circle((lat1, lon1), (lat2, lon2)).km
+    
+
 
     try:
         #we look for teh nearest node, and we calculate the shortest path between them
         orig_node = ox.nearest_nodes(rail_graph_wgs, lon1, lat1)
         dest_node = ox.nearest_nodes(rail_graph_wgs, lon2, lat2)
-        if debug:
-            print("orig_node, dest_node:", orig_node, dest_node)
 
         #we use weight='length' when available to prefer realistic rail routing:
         try:
@@ -178,16 +194,11 @@ def get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False):
             shortest_path = ox.shortest_path(rail_graph_wgs, orig_node, dest_node)
 
         if shortest_path is None or len(shortest_path) == 0:
-            if debug: print(f"No path between {orig_node} and {dest_node}")
+            print(f"No path between {orig_node} and {dest_node}")
             return great_circle((lat1, lon1), (lat2, lon2)).km
-
-        if debug:
-            print("shortest_path length (nodes):", len(shortest_path))
-            print("shortest_path sample nodes:", shortest_path[:6])
 
         #If orig==dest or path of length 1, fallback
         if orig_node == dest_node or len(shortest_path) <= 1:
-            if debug: print("Origin and destination collapsed to same node — falling back to great_circle")
             return great_circle((lat1, lon1), (lat2, lon2)).km
 
         total_km = 0.0
@@ -203,24 +214,23 @@ def get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False):
 
             #If any of these are None, abort and fallback
             if None in (lat_u, lon_u, lat_v, lon_v):
-                if debug: print(f"Missing coords for nodes {u} or {v}, falling back to great_circle on station coords.")
+                print(f"Missing coords for nodes {u} or {v}, PITOOOOOO")
                 return great_circle((lat1, lon1), (lat2, lon2)).km
 
             if not (-90 <= lat_u <= 90 and -90 <= lat_v <= 90 and -180 <= lon_u <= 180 and -180 <= lon_v <= 180):
-                if debug:
-                    print(f"Coords look projected for nodes {u}/{v}: {(lon_u, lat_u)} -> {(lon_v, lat_v)}")
-                    print("Falling back to great_circle on station coords.")
+                print(f"Coords look projected for nodes {u}/{v}: {(lon_u, lat_u)} -> {(lon_v, lat_v)}")
+                print("Falling back to great_circle on station coords.")
                 return great_circle((lat1, lon1), (lat2, lon2)).km
 
             total_km += great_circle((lat_u, lon_u), (lat_v, lon_v)).km
 
-        if debug: print(f"Total distance via nodes: {total_km:.4f} km")
-        if total_km < 0.05 and debug:
-            print("WARNING: computed total_km < 0.05 km — verify that the rail_graph is correct and unprojected.")
+        print(f"Total distance via nodes: {total_km:.4f} km")
+        if total_km < 0.05:
+            print("total < 0.05km impossible")
         return total_km
 
     except Exception as e:
-        if debug: print(f"Error calculating geographic rail distance: {e}. Falling back to great_circle.")
+        print(f"EERROR: calculating geographic rail distance: {e}. Falling back to great_circle.")
         return great_circle((lat1, lon1), (lat2, lon2)).km
 
 
@@ -244,7 +254,6 @@ for index, row in data.iterrows():
     G.add_node(norm_name, id=station_id, name=station_name, lat=lat, lon=lon)
 
 print(f"Finished adding {G.number_of_nodes()} stations as nodes.")
-
 
 '''
 Downloaf all the cache files, with the rail_nodes information
@@ -304,7 +313,7 @@ def add_rail_connections(graph: nx.Graph, connections: list, rail_graph_wgs: nx.
             
             #Calculate the rail track distance
             if rail_graph_wgs:
-                distance = get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs, debug=False)
+                distance = get_rail_distance(lat1, lon1, lat2, lon2, rail_graph_wgs)
             else:
                 print("Damn that's some thought shit man, I don't know what to do right now.")
             
@@ -609,7 +618,7 @@ def visualize_rail_graph(graph: nx.Graph, output_filename="rodalies_map.html"):
     m.fit_bounds(bounds, padding=(50, 50))
 
     m.save(output_filename)
-    print(f"✅ Interactive map saved to: {output_filename}Open this file in your browser to view the map.")
+    print(f"map saved to: {output_filename}")
 
 if __name__ == "__main__":
     visualize_rail_graph(G)
