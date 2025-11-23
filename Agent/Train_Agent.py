@@ -8,11 +8,9 @@ from Station_Translator import StationTranslator
 
 class TrainAgent:
     """
-    Q-learning agent that controls a single train (or more, depending on how
-    StationTranslator encodes the state).
+    Agent que pot controlar un tren, o varis, segons la codificació del train station
 
-    It is environment-agnostic: it only works with integer state ids and
-    action indices.
+    Llogica totalment apartada del enviroment, nomes funciona amb state ids i accions
     """
 
     def __init__(
@@ -35,7 +33,7 @@ class TrainAgent:
 
     def evaluate_actions(self, state_id: int) -> int:
         """
-        Decide an action index given a discrete state id.
+        Decideix acció segons state ID
         """
         return self._policy(state_id)
 

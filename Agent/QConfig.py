@@ -1,4 +1,8 @@
+
 class QConfig:
+    """
+    Permet poder alterar de manera fàcil la llògica del agent
+    """
     alpha: float = 0.7      # learning rate
     gamma: float = 0.9      # discount factor
     epsilon: float = 0.9    # exploration rate

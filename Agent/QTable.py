@@ -21,10 +21,8 @@ class QTable:
                done: bool,
                alpha: float,
                gamma: float) -> None:
-        """
-        Standard Q-learning update:
-        Q(s,a) ← Q(s,a) + α [ r + γ max_a' Q(s',a') − Q(s,a) ]
-        """
+        
+        #Bellman        
         current_q = self.values[state, action]
         if done:
             target = reward

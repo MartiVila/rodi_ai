@@ -1,13 +1,9 @@
 class StationTranslator:
     """
-        S'encarregara de Passar les dades de Enviroment a Dades que l'Agent pugui interpretar
-    """
+    S'encarregara de Passar les dades de Enviroment a Dades que l'Agent pugui interpretar
 
-    """
-    Converts environment information (trains, nodes, etc.) to a discrete state id.
-
-    This is the only place that knows about the real structure
-    of the railway network. The agent only sees integer states.
+    Es a dir, passa les dades del enviroment en un id de situació
+    Fa que cada estat sigui un estat discret, amb un id
     """
 
     def __init__(self, n_trains: int, n_nodes: int):
@@ -16,6 +12,11 @@ class StationTranslator:
         # total number of discrete states
         self.n_states = n_trains * n_nodes
 
+
+    # Podriem multiplicar per 1000 el train id, 4 primers bits siguin train id,
+    # Últims (NS quantes estacions hi ha) 8 bits siguin station id
+    #   Això també permet anar afegint variables sense haver d'alterar agent
+    #   Simplement anem multiplicant pq tot quadri i ja està
     def encode(self, train_id: int, node_id: int) -> int:
         """
         Map (train_id, node_id) -> state index in [0, n_states-1].
