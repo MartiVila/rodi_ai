@@ -1,26 +1,33 @@
-from collections import defaultdict
 import numpy as np
-import random
+
 class QTable:
-    def __init__(self, n_actions, alpha=0.7, gamma=0.9,
-                 epsilon=0.9, epsilon_decay=0.1, min_epsilon=0.1):
+
+    def __init__(self, n_states: int, n_actions: int):
+        self.n_states = n_states
         self.n_actions = n_actions
-        self.alpha = alpha
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.min_epsilon = min_epsilon
-        self.q = defaultdict(lambda: np.zeros(n_actions))
+        self.values = np.zeros((n_states, n_actions))
 
-    def act(self, state):
-        if random.random() < self.epsilon:
-            return random.randrange(self.n_actions)
-        return int(np.argmax(self.q[state]))
+    def get(self, state: int, action: int) -> float:
+        return float(self.values[state, action])
 
-    def learn(self, state, action, reward, next_state, done):
-        current_q = self.q[state][action]
+    def get_row(self, state: int) -> np.ndarray:
+        return self.values[state]
+
+    def update(self,
+               state: int,
+               action: int,
+               reward: float,
+               next_state: int,
+               done: bool,
+               alpha: float,
+               gamma: float) -> None:
+        """
+        Standard Q-learning update:
+        Q(s,a) ← Q(s,a) + α [ r + γ max_a' Q(s',a') − Q(s,a) ]
+        """
+        current_q = self.values[state, action]
         if done:
             target = reward
         else:
-            target = reward + self.gamma * np.max(self.q[next_state])
-        self.q[state][action] = current_q + self.alpha * (target - current_q)
+            target = reward + gamma * np.max(self.values[next_state])
+        self.values[state, action] = current_q + alpha * (target - current_q)
