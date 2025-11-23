@@ -12,8 +12,23 @@ latest_trains = {
     "trains": [],
 }
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-LATEST_TRAINS_FILE = os.path.join(DATA_DIR, "latest_trains.json")
+BASE_DIR = os.path.dirname(__file__)
+# Data directory for the scraper output. When this module lives under `Enviroment/`
+# the scrapers write into `Enviroment/DATASCRAPERS/data`. But keep a fallback to
+# the repository-level `data/` directory if present (helps when running from
+# different working directories after a refactor).
+DATA_DIR = os.path.join(BASE_DIR, 'DATASCRAPERS', 'data')
+if not os.path.isdir(DATA_DIR):
+  # fallback to parent `data/` (project root `data/`)
+  candidate = os.path.abspath(os.path.join(BASE_DIR, '..', 'data'))
+  if os.path.isdir(candidate):
+    DATA_DIR = candidate
+
+LATEST_TRAINS_FILE = os.path.join(DATA_DIR, 'latest_trains.json')
+
+# Path to stop_times (used by other modules). Keep as best-effort: point to
+# project-level `data/stop_times.txt` if present.
+STOP_TIMES = os.path.abspath(os.path.join(BASE_DIR, '..', 'data', 'stop_times.txt'))
 
 # We will NOT call the remote API from this map server. Instead we read the
 # local JSON file produced by `scraper_directe.py` (write_trains_to_file).
@@ -133,6 +148,18 @@ INDEX_HTML = """
   let autoFit = true; // when true, map will fit bounds to markers after updates
   let followId = null; // id of train to follow (centers map on this train each update)
 
+      // determine if a train should be considered delayed
+      function isDelayed(raw) {
+        if (!raw) return false;
+        if (typeof raw.delay !== 'undefined' && Number(raw.delay)) {
+          try { return Number(raw.delay) > 0; } catch(e) { }
+        }
+        const s = (raw.status || '').toString().toLowerCase();
+        if (s.includes('delay') || s.includes('delayed') || s.includes('late')) return true;
+        if (s.includes('retras') || s.includes('retraso')) return true;
+        return false;
+      }
+
       async function fetchTrains(){
         try{
           const resp = await fetch('/trains');
@@ -176,6 +203,15 @@ INDEX_HTML = """
                 // move marker
                 markers[id].setLatLng([lat, lon]);
                 markers[id].setPopupContent(`<b>${id}</b><br>${raw.trip || ''}<br>${raw.status || ''}`);
+                // update style if delay status changes
+                try {
+                  const delayed = isDelayed(raw);
+                  const color = delayed ? 'red' : 'green';
+                  const fill = delayed ? '#f03' : '#3f3';
+                  if (typeof markers[id].setStyle === 'function') {
+                    markers[id].setStyle({ color: color, fillColor: fill });
+                  }
+                } catch(e){ /* ignore style update errors */ }
               } else {
                 const m = makeMarker(lat, lon, id, raw);
                 markers[id] = m;
@@ -247,9 +283,13 @@ INDEX_HTML = """
 
       // allow clicking a marker to follow that train (center on it each update)
       function makeMarker(lat, lon, id, raw) {
-        const m = L.circleMarker([lat, lon], {radius:6, color: 'red', fillColor: '#f03', fillOpacity: 0.7});
+        const delayed = isDelayed(raw);
+        const color = delayed ? 'red' : 'green';
+        const fill = delayed ? '#f03' : '#3f3';
+        const m = L.circleMarker([lat, lon], {radius:6, color: color, fillColor: fill, fillOpacity: 0.7});
         m.addTo(map);
-        m.bindPopup(`<b>${id}</b><br>${raw.trip || ''}<br>${raw.status || ''}<br><small>Click to follow</small>`);
+        const delayInfo = (typeof raw.delay !== 'undefined') ? `<br><b>Delay:</b> ${raw.delay}` : '';
+        m.bindPopup(`<b>${id}</b><br>${raw.trip || ''}<br>${raw.status || ''}${delayInfo}<br><small>Click to follow</small>`);
         m.on('click', ()=>{
           followId = id;
           map.panTo([lat, lon]);

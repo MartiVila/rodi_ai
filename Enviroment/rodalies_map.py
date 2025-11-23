@@ -42,7 +42,7 @@ def _normalize_name(name):
     final_name = final_name.upper()#everything must be upper
     return final_name
 
-file_path = 'data/estaciones_coordenadas.csv'
+file_path = 'Enviroment/data/estaciones_coordenadas.csv'
 #We're reading with two separtors cause the file is big and we don't trust renfe!
 def read_data(path):
     try:
