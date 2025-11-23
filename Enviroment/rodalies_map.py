@@ -1,4 +1,4 @@
-from scraper_oneuse import scrape_rodalies_line_stations
+from DATASCRAPERS.scraper_oneuse import scrape_rodalies_line_stations
 import pandas as panda
 import numpy as np
 import networkx as nx
