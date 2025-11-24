@@ -15,7 +15,13 @@ Per reduir la memòria utilitzada per definir un estat i fer més escalable i mo
 - Quina estació/Via (Id de la estació o via)
 - Estat (Anant, parat, espatllat) (0-2)
 - delay (en minuts? 3 xifres?)
-- Tipus tren? (alta velocitat, rodalies?)
+
+>**Considerar**:
+>
+> Crec que necessitarem alguna mena d'indicar la direcció
+>
+> Si fem nomes barcelona podem fer bits de validació per trens \
+>   Suposem que dins barcelona hi ha un màxim de (exemple) 10 trens, i indiquem quants trens hi ha i que eviti mirar els demes
 
 #### Dades Estació
 
