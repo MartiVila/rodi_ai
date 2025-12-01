@@ -4,6 +4,9 @@ class StationTranslator:
 
     Es a dir, passa les dades del enviroment en un id de situació
     Fa que cada estat sigui un estat discret, amb un id
+    
+
+    Potser podriem definir enums o dicts d'encoding
     """
 
     def __init__(self, n_trains: int, n_nodes: int):

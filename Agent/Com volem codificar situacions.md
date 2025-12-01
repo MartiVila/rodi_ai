@@ -35,3 +35,14 @@ Entre cada un d'ells podriem posar un codi rollo 0000 o algo així per definir u
 
 - Hora, minut, segon dia (?  afegiria molts estats extres, potser molt semblants, podriem fer que anes de 30 en 30 min)
 - num trens operatius (?)
+
+
+
+> El de TNUI fa un LRF per reduir numero de paràmetres
+
+Redueixes a què està connectat cada neurona
+En el seu cas, una naurona està conectada (exemple)  els primer 25 bits i la segona als mateixos 25 però treien la primera columna i sumantli a darrera
+
+
+
+POTSER val la pena fer una dimensió per a cada tren i que es faci encoding de la seva situació personal (origen destí, desti ocupat, etc) NO SE SI QUEDARA MOLT GRAN
