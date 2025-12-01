@@ -46,3 +46,17 @@ En el seu cas, una naurona està conectada (exemple)  els primer 25 bits i la se
 
 
 POTSER val la pena fer una dimensió per a cada tren i que es faci encoding de la seva situació personal (origen destí, desti ocupat, etc) NO SE SI QUEDARA MOLT GRAN
+
+
+
+Si anessim per linia ja no caldria guardar en quina linea està
+entenc k origen i destí no és tant important si simplement posem un bit de direcció
+caldira bit de validació davant de cada tren
+
+Posem un bit per dir en quin numero de parada està
+Dins dels estats globals (al principi del encoding) posar len de linia en numero d'estacions
+
+
+num_estacions (2_10) num_trens (2_10) (per tren) bit validació(un), id_tren(4digits? es podria normalitzar?), direcció(1 bit), num node(2 bits), estat_proxima_estació(1bit) 
+
+--> Potser podriem unificar d'alguna manera que el id del tren no influeixi a la decisió de la IA
