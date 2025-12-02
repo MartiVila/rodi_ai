@@ -74,3 +74,7 @@ podriem simplement no posar numero de tren
 Pq i si nomes fessim IA per a cada punt (estació) i a la hora de fer l'encoding passesim els desviaments ab les distàncis?
 
 Moltes situacions es generalitzarien, però la IA mai tindria un valor exacte de retorn del enviroment pq el fariem passar per diferentes situacions
+
+
+
+

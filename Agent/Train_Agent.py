@@ -31,6 +31,14 @@ class TrainAgent:
         # create Q-table with as many states as translator encodes
         self.q_table = QTable(self.translator.n_states, self.n_actions)
 
+    
+    def answer(self, train, station,):
+
+        state_id = self.translator.encode()
+        return self.evaluate_actions(state_id)
+
+
+
     def evaluate_actions(self, state_id: int) -> int:
         """
         Decideix acció segons state ID
