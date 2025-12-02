@@ -60,3 +60,17 @@ Dins dels estats globals (al principi del encoding) posar len de linia en numero
 num_estacions (2_10) num_trens (2_10) (per tren) bit validació(un), id_tren(4digits? es podria normalitzar?), direcció(1 bit), num node(2 bits), estat_proxima_estació(1bit) 
 
 --> Potser podriem unificar d'alguna manera que el id del tren no influeixi a la decisió de la IA
+
+
+
+
+---> Pensar en codificar el minim possible
+
+--> AL estat s'ha d'intentar generalitzar el màxim possible per tal de trobar més situacions semblants i poder entrenar més eficaçment la IA
+
+Reduir el numero de info que passem , nomes la necessaria
+podriem simplement no posar numero de tren
+
+Pq i si nomes fessim IA per a cada punt (estació) i a la hora de fer l'encoding passesim els desviaments ab les distàncis?
+
+Moltes situacions es generalitzarien, però la IA mai tindria un valor exacte de retorn del enviroment pq el fariem passar per diferentes situacions
