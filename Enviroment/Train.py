@@ -1,91 +1,100 @@
 import pygame
-import math
 from .EdgeType import EdgeType
 
+class TrainStatus:
+    SENSE_RETARD = "ON TIME"     # < 15 min
+    RETARD_MODERAT = "DELAYED"   # 15 - 30 min
+    AVARIAT = "BROKEN"           # > 30 min
+
 class Train:
-    # Canvi: Ara rep 'route_nodes' (llista de Nodes) en lloc de start/target individuals
-    def __init__(self, agent, route_nodes):
+    def __init__(self, agent, route_nodes, scheduled_times, start_time_sim):
         self.agent = agent
-        self.route = route_nodes 
-        self.route_index = 0 # Estem a l'estació 0 de la ruta
+        self.route = route_nodes
+        self.schedule = scheduled_times # Dict {node_id: minut_arribada_teoric}
+        self.start_time = start_time_sim # Minut de sortida global
         
-        self.node = self.route[self.route_index]
-        self.target = self.route[self.route_index + 1]
+        self.route_index = 0
+        self.node = self.route[0]
+        self.target = self.route[1]
         
-        self.edges = [] 
-        self.current_edge = None
-        self.progress = 0
-        self.travel_time = 0
-        self.finished = False
-        
-        # Inicialitzem el primer tram
+        self.current_time_accumulated = 0 # Temps que porta viatjant el tren
+        self.status = TrainStatus.SENSE_RETARD
+        self.delay_minutes = 0
+
         self.setup_segment()
 
     def setup_segment(self):
-        """Prepara el tren per anar del node actual al següent target."""
-        # Busquem les vies que connecten el node actual amb el target
+        # (Codi existent per buscar aresta...)
         if self.target.id in self.node.neighbors:
-            self.edges = self.node.neighbors[self.target.id]
-            self.decide_route()
+            # Agafem les vies disponibles
+            possible_edges = self.node.neighbors[self.target.id]
+            # Deleguem a l'agent quina via agafar
+            # (Aquí l'agent hauria d'aprendre a evitar OBSTACLE per no acumular retard)
+            state = self.get_state(possible_edges)
+            action = self.agent.choose_action(state)
+            self.current_edge = possible_edges[action]
         else:
-            # Error de seguretat si no hi ha connexió
             self.finished = True
 
-    def get_state(self):
-        status_0 = "OK" if self.edges[0].edge_type == EdgeType.NORMAL else "BAD"
-        status_1 = "OK" if self.edges[1].edge_type == EdgeType.NORMAL else "BAD"
-        return (self.node.id, self.target.id, status_0, status_1)
+    def get_state(self, edges):
+        # Retorna estat (similar al teu codi anterior però adaptat)
+        s0 = edges[0].edge_type
+        s1 = edges[1].edge_type
+        return (self.node.id, self.target.id, s0, s1)
 
-    def decide_route(self):
-        self.state_at_departure = self.get_state()
-        self.action_taken = self.agent.choose_action(self.state_at_departure)
-        self.current_edge = self.edges[self.action_taken]
-
-    def update(self):
+    def update(self, dt_minutes):
+        """
+        dt_minutes: quants minuts han passat a la simulació des de l'últim frame
+        """
         if self.finished: return
 
-        self.progress += self.current_edge.speed
-        self.travel_time += 1 
+        # 1. Actualitzem temps real del tren
+        self.current_time_accumulated += dt_minutes
+        
+        # 2. Avancem posició (visual)
+        # La velocitat visual depèn de si la via és ràpida o lenta (calculat a Edge)
+        self.progress += self.current_edge.vis_speed 
 
+        # 3. Comprovem estat de retard respecte a l'horari previst al TARGET
+        target_schedule = self.schedule.get(self.target.id, 0)
+        # Temps actual absolut = Hora sortida + Temps viatjat
+        current_clock_time = self.start_time + self.current_time_accumulated
+        
+        self.delay_minutes = current_clock_time - target_schedule
+        
+        if self.delay_minutes < 15:
+            self.status = TrainStatus.SENSE_RETARD
+        elif self.delay_minutes < 30:
+            self.status = TrainStatus.RETARD_MODERAT
+        else:
+            self.status = TrainStatus.AVARIAT
+
+        # 4. Arribada a estació
         if self.progress >= 1.0:
-            # --- 1. Aprenentatge del tram completat ---
-            reward = -self.travel_time 
-            next_state = (self.target.id, "None", "None", "None") # Simplificació
-            self.agent.learn(self.state_at_departure, self.action_taken, reward, next_state)
+            self.arrive_at_station()
 
-            # --- 2. Lògica de següent estació ---
-            self.progress = 0
-            self.travel_time = 0
-            
-            # Ens movem al node on acabem d'arribar
-            self.node = self.target
-            self.route_index += 1
+    def arrive_at_station(self):
+        self.progress = 0
+        self.node = self.target
+        self.route_index += 1
+        
+        # Recompensa a l'agent: Volem minimitzar el retard!
+        # Reward negatiu gran si hi ha molt retard
+        reward = -self.delay_minutes 
+        # (Aquí cridaries self.agent.learn(...))
 
-            # Comprovem si queden més estacions a la ruta
-            if self.route_index < len(self.route) - 1:
-                self.target = self.route[self.route_index + 1]
-                self.setup_segment() # Preparem el següent tram
-            else:
-                self.finished = True # Final de trajecte
+        if self.route_index < len(self.route) - 1:
+            self.target = self.route[self.route_index + 1]
+            self.setup_segment()
+        else:
+            self.finished = True
 
     def draw(self, screen):
-        # (El codi de draw es manté idèntic, ja que depèn de current_edge i progress)
-        if not self.current_edge: return
+        # (El teu codi de dibuix)
+        # Pots canviar el color del tren segons self.status!
+        color = (0, 255, 0) # Verd
+        if self.status == TrainStatus.RETARD_MODERAT: color = (255, 165, 0) # Taronja
+        if self.status == TrainStatus.AVARIAT: color = (255, 0, 0) # Vermell
         
-        off = 3 if self.current_edge.track_id == 0 else -3
-        dx = self.current_edge.node2.x - self.current_edge.node1.x
-        dy = self.current_edge.node2.y - self.current_edge.node1.y
-        dist = math.sqrt(dx*dx + dy*dy)
-        if dist == 0: dist = 1
-        perp_x = -dy / dist
-        perp_y = dx / dist
-        
-        x1 = self.current_edge.node1.x + perp_x * off
-        y1 = self.current_edge.node1.y + perp_y * off
-        x2 = self.current_edge.node2.x + perp_x * off
-        y2 = self.current_edge.node2.y + perp_y * off
-        
-        curr_x = x1 + (x2 - x1) * self.progress
-        curr_y = y1 + (y2 - y1) * self.progress
-        
-        pygame.draw.circle(screen, (255, 200, 0), (int(curr_x), int(curr_y)), 4)
+        # Dibuixar cercle amb 'color'
+        # ...
