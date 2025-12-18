@@ -4,6 +4,7 @@ import pandas as pd
 import math
 import re
 import unicodedata
+from geopy.distance import great_circle
 
 # Delegació total a Enviroment i Agent
 from Enviroment.EdgeType import EdgeType
@@ -59,7 +60,19 @@ class RodaliesAI:
         except: return None
 
     def load_real_data(self):
-        """Carrega dades i delega la creació de Nodes a Enviroment."""
+
+        self.r1_connections = [
+            ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
+            ('SANTJOANDESPI', 'CORNELLA'), ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
+            ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'), ('BARCELONASANTS', 'PLACADECATALUNYA'),
+            ('PLACADECATALUNYA', 'ARCDETRIOMF'), ('ARCDETRIOMF', 'BARCELONACLOTARAGO')
+        ]
+
+        wanted_stations = set()
+        for s1, s2 in self.r1_connections:
+            wanted_stations.add(self._normalize_name(s1))
+            wanted_stations.add(self._normalize_name(s2))
+
         csv_path = 'Enviroment/data/estaciones_coordenadas.csv'
         try:
             df = pd.read_csv(csv_path, sep=';', encoding='latin1', skipinitialspace=True)
@@ -67,23 +80,34 @@ class RodaliesAI:
         except Exception: return
 
         lats, lons, temp_st = [], [], []
+        
         for _, row in df.iterrows():
             name = row.get('NOMBRE_ESTACION')
+
+            norm_name = self._normalize_name(name)
+
+            if norm_name not in wanted_stations:
+                continue 
+
             lat, lon = self._parse_coord(row.get('LATITUD'), True), self._parse_coord(row.get('LONGITUD'), False)
             if name and lat and lon:
-                temp_st.append({'id': str(row.get('ID')), 'norm': self._normalize_name(name), 'orig': name, 'lat': lat, 'lon': lon})
-                lats.append(lat); lons.append(lon)
+                temp_st.append({'id': str(row.get('ID')), 'norm': norm_name, 'orig': name, 'lat': lat, 'lon': lon})
+                lats.append(lat)
+                lons.append(lon)
 
         if not lats: return
+        
         min_lat, max_lat, min_lon, max_lon = min(lats), max(lats), min(lons), max(lons)
 
         for st in temp_st:
+
             x = ((st['lon'] - min_lon) / (max_lon - min_lon)) * (self.width - 100) + 50
             y = self.height - (((st['lat'] - min_lat) / (max_lat - min_lat)) * (self.height - 100) + 50)
-            node = Node(x, y, st['id'], name=st['orig']) #
+            
+            node = Node(x, y, st['id'], name=st['orig'])
             node.lat, node.lon = st['lat'], st['lon']
             self.nodes[st['norm']] = node
-            
+
         self.build_R1()
 
     def add_connection(self, s1, s2):
@@ -91,29 +115,26 @@ class RodaliesAI:
         n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
         if n1 in self.nodes and n2 in self.nodes:
             u, v = self.nodes[n1], self.nodes[n2]
-            # Càlcul de durada base (podria moure's a Enviroment/Edge si es vol extremar el refactor)
-            dist = math.sqrt((u.x-v.x)**2 + (u.y-v.y)**2) 
-            e0, e1 = Edge(u, v, EdgeType.NORMAL, dist * 0.5, 0), Edge(u, v, EdgeType.NORMAL, dist * 0.5, 1) #
+            if u.lat is not None and u.lon is not None and v.lat is not None and v.lon is not None:
+                dist = great_circle((u.lat, u.lon), (v.lat, v.lon)).km
+            else:
+                dist = math.sqrt((u.x-v.x)**2 + (u.y-v.y)**2) 
+            #el factor de multiplicacio de dist es pel temps que volem que fagi el tren 1 km
+            e0, e1 = Edge(u, v, EdgeType.NORMAL, dist * 50, 0), Edge(u, v, EdgeType.NORMAL, dist * 50, 1) #
             self.all_edges.extend([e0, e1])
             u.neighbors[v.id] = [e0, e1]
 
     def build_R1(self):
-        # 1. Definir connexions físiques (com tenies abans)
-        connections = [('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
-                   ('SANTJOANDESPI', 'CORNELLA'), ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
-                   ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'), ('BARCELONASANTS', 'PLACADECATALUNYA'),
-                   ('PLACADECATALUNYA', 'ARCDETRIOMF'), ('ARCDETRIOMF', 'BARCELONACLOTARAGO')]
-        for s1, s2 in connections: self.add_connection(s1, s2)
-        
-        # 2. Definir la RUTA lògica de la línia (seqüència ordenada d'estacions)
-        # Això permetrà crear trens que sàpiguen on anar després de cada parada
+
+        for s1, s2 in self.r1_connections: 
+            self.add_connection(s1, s2)
+
         self.lines = {}
         self.lines['R1_NORD'] = [
             'MOLINSDEREI', 'SANTFELIUDELLOBREGAT', 'SANTJOANDESPI', 'CORNELLA', 
             'LHOSPITALETDELLOBREGAT', 'BARCELONASANTS', 'PLACADECATALUNYA', 
             'ARCDETRIOMF', 'BARCELONACLOTARAGO'
         ]
-        # Opcional: Ruta inversa
         self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
 
     def spawn_line_train(self, line_name):
@@ -158,7 +179,6 @@ class RodaliesAI:
         target = next(n for n in self.nodes.values() if n.id == target_id)
         # El tren rep l'agent i pren la seva pròpia decisió al néixer
         self.active_trains.append(Train(self.brain, start, target, start.neighbors[target_id]))
-
 
     def run(self):
         while self.running:
