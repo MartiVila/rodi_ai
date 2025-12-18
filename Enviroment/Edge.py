@@ -1,4 +1,4 @@
-from . import EdgeType
+from .EdgeType import EdgeType
 import math
 import pygame
 

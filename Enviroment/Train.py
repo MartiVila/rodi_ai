@@ -1,4 +1,6 @@
 import pygame
+import math
+from .EdgeType import EdgeType # Import necessari per a get_state() 
 class Train:
     def __init__(self, agent, start_node, target_node, available_edges):
         self.agent = agent
