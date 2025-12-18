@@ -14,6 +14,16 @@ from Enviroment.Train import Train
 import Agent.QlearningAgent as QLearningAgent
 
 class RodaliesAI:
+    # --- CONFIGURACIÓ DEL SISTEMA DE TEMPS ---
+    TIME_SCALE = 10.0      # 1 segon real = 10 minuts simulats
+    SPAWN_INTERVAL = 30    # Cada quants minuts simulats surt un tren
+
+    #RESET_INTERVAL = 1440  # Cada quants minuts es reseteja la via (24h)
+    #CHAOS_INTERVAL = 600   # Cada quants minuts hi ha incidents (10h)
+
+    RESET_INTERVAL = 210  # Cada quants minuts es reseteja la via (24h)
+    CHAOS_INTERVAL = 60   # Cada quants minuts hi ha incidents (10h)
+    
     def __init__(self):
         pygame.init()
         self.width, self.height = 1400, 900
@@ -27,18 +37,21 @@ class RodaliesAI:
         self.all_edges = []
         self.active_trains = []
         
-        # L'agent es troba al lloc correcte: s'inicialitza un cop i es passa als trens
+        # Agent
         self.brain = QLearningAgent.QLearningAgent(epsilon=0.2) 
 
-        # Timers per a la mecànica de simulació
-        self.last_chaos = pygame.time.get_ticks()
-        self.last_reset = pygame.time.get_ticks()
-        self.last_spawn = pygame.time.get_ticks()
+        # --- SISTEMA DE TEMPS UNIFICAT ---
+        # Tot s'inicialitza a 0.0 (minuts de simulació)
+        self.sim_time = 0.0
+        
+        # Timers sincronitzats amb el temps de simulació, no amb el de la CPU
+        self.last_chaos = self.sim_time
+        self.last_reset = self.sim_time
+        self.last_spawn = self.sim_time
 
         self.load_real_data()
 
     def _normalize_name(self, name):
-        """Utilitza la mateixa lògica de normalització que el prototip."""
         if not isinstance(name, str): return ""
         n = name.lower().replace(' ', '').replace('-', '').replace("'", "")
         n = n.replace('ñ', 'n').replace('ç', 'c')
@@ -46,7 +59,6 @@ class RodaliesAI:
         return n.upper()
 
     def _parse_coord(self, raw, is_lat=True):
-        """Implementa la neteja de coordenades del prototip."""
         if raw is None or (isinstance(raw, float) and math.isnan(raw)): return None
         s = str(raw).strip().replace('−', '-')
         digits = re.sub(r"[^0-9-]", "", s)
@@ -60,7 +72,6 @@ class RodaliesAI:
         except: return None
 
     def load_real_data(self):
-
         self.r1_connections = [
             ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
             ('SANTJOANDESPI', 'CORNELLA'), ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
@@ -80,14 +91,10 @@ class RodaliesAI:
         except Exception: return
 
         lats, lons, temp_st = [], [], []
-        
         for _, row in df.iterrows():
             name = row.get('NOMBRE_ESTACION')
-
             norm_name = self._normalize_name(name)
-
-            if norm_name not in wanted_stations:
-                continue 
+            if norm_name not in wanted_stations: continue 
 
             lat, lon = self._parse_coord(row.get('LATITUD'), True), self._parse_coord(row.get('LONGITUD'), False)
             if name and lat and lon:
@@ -96,11 +103,9 @@ class RodaliesAI:
                 lons.append(lon)
 
         if not lats: return
-        
         min_lat, max_lat, min_lon, max_lon = min(lats), max(lats), min(lons), max(lons)
 
         for st in temp_st:
-
             x = ((st['lon'] - min_lon) / (max_lon - min_lon)) * (self.width - 100) + 50
             y = self.height - (((st['lat'] - min_lat) / (max_lat - min_lat)) * (self.height - 100) + 50)
             
@@ -111,24 +116,22 @@ class RodaliesAI:
         self.build_R1()
 
     def add_connection(self, s1, s2):
-        """Crea connexions delegant la lògica de l'aresta a Enviroment."""
         n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
         if n1 in self.nodes and n2 in self.nodes:
             u, v = self.nodes[n1], self.nodes[n2]
-            if u.lat is not None and u.lon is not None and v.lat is not None and v.lon is not None:
+            if hasattr(u, 'lat') and u.lat and hasattr(v, 'lat') and v.lat:
                 dist = great_circle((u.lat, u.lon), (v.lat, v.lon)).km
             else:
-                dist = math.sqrt((u.x-v.x)**2 + (u.y-v.y)**2) 
-            #el factor de multiplicacio de dist es pel temps que volem que fagi el tren 1 km
-            e0, e1 = Edge(u, v, EdgeType.NORMAL, dist * 50, 0), Edge(u, v, EdgeType.NORMAL, dist * 50, 1) #
+                dist = math.sqrt((u.x-v.x)**2 + (u.y-v.y)**2) * 0.05 
+            
+            e0 = Edge(u, v, EdgeType.NORMAL, 0)
+            e1 = Edge(u, v, EdgeType.NORMAL, 1)
             self.all_edges.extend([e0, e1])
             u.neighbors[v.id] = [e0, e1]
 
     def build_R1(self):
-
         for s1, s2 in self.r1_connections: 
             self.add_connection(s1, s2)
-
         self.lines = {}
         self.lines['R1_NORD'] = [
             'MOLINSDEREI', 'SANTFELIUDELLOBREGAT', 'SANTJOANDESPI', 'CORNELLA', 
@@ -137,71 +140,107 @@ class RodaliesAI:
         ]
         self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
 
-    def spawn_line_train(self, line_name):
-        """Genera un tren que recorrerà tota la línia especificada."""
-        if line_name not in self.lines: return
+    def calculate_schedule(self, route_nodes, start_time):
+        schedule = {}
+        current_time = start_time
+        if route_nodes:
+            schedule[route_nodes[0].id] = current_time
+        for i in range(len(route_nodes) - 1):
+            u, v = route_nodes[i], route_nodes[i+1]
+            if v.id in u.neighbors:
+                edges = u.neighbors[v.id]
+                travel_time = edges[0].expected_minutes
+                current_time += travel_time
+                schedule[v.id] = current_time
+            else: break
+        return schedule
 
-        # Convertim noms d'estacions a objectes Node
+    def spawn_line_train(self, line_name):
+        if line_name not in self.lines: return
         station_names = self.lines[line_name]
-        route_nodes = []
-        for name in station_names:
-            if name in self.nodes:
-                route_nodes.append(self.nodes[name])
+        route_nodes = [self.nodes[n] for n in station_names if n in self.nodes]
         
-        # Només creem el tren si la ruta és vàlida i té almenys 2 estacions
         if len(route_nodes) > 1:
-            # Passem la llista completa de nodes al tren
-            new_train = Train(self.brain, route_nodes)
+            schedule = self.calculate_schedule(route_nodes, self.sim_time)
+            new_train = Train(self.brain, route_nodes, schedule, self.sim_time)
             self.active_trains.append(new_train)
 
+    def spawn_random_train(self):
+        origins = [n for n in self.nodes.values() if n.neighbors]
+        if not origins: return
+        start = random.choice(origins)
+        target_id = random.choice(list(start.neighbors.keys()))
+        target = next(n for n in self.nodes.values() if n.id == target_id)
+        
+        route_nodes = [start, target]
+        schedule = self.calculate_schedule(route_nodes, self.sim_time)
+        self.active_trains.append(Train(self.brain, route_nodes, schedule, self.sim_time))
+
     def handle_mechanics(self):
-        """Actualitza l'estat de les arestes delegant a la seva pròpia gestió interna."""
-        now = pygame.time.get_ticks()
-        if now - self.last_reset > 12000:
-            self.last_reset = now
+        """Gestiona esdeveniments basats en el temps de simulació."""
+        # Reset diari (neteja d'obstacles)
+        if self.sim_time - self.last_reset > self.RESET_INTERVAL:
+            self.last_reset = self.sim_time
             for e in self.all_edges: 
                 e.edge_type = EdgeType.NORMAL
-                e.update_properties() # Delega el recàlcul de velocitat
-        elif now - self.last_chaos > 5000:
-            self.last_chaos = now
+                e.update_properties()
+        
+        # Caos aleatori (obstacles)
+        if self.sim_time - self.last_chaos > self.CHAOS_INTERVAL:
+            self.last_chaos = self.sim_time
             normals = [e for e in self.all_edges if e.edge_type == EdgeType.NORMAL]
             if len(normals) > 2:
                 for e in random.sample(normals, 2):
                     e.edge_type = EdgeType.OBSTACLE
                     e.update_properties()
 
-    def spawn_random_train(self):
-        """Delega la decisió de ruta a la classe Train, que usa l'agent."""
-        origins = [n for n in self.nodes.values() if n.neighbors]
-        if not origins: return
-        start = random.choice(origins)
-        target_id = random.choice(list(start.neighbors.keys()))
-        target = next(n for n in self.nodes.values() if n.id == target_id)
-        # El tren rep l'agent i pren la seva pròpia decisió al néixer
-        self.active_trains.append(Train(self.brain, start, target, start.neighbors[target_id]))
-
     def run(self):
         while self.running:
+            # 1. Càlcul del temps unificat
+            dt_ms = self.clock.tick(60)       
+            dt_real_seconds = dt_ms / 1000.0          
+            dt_sim_minutes = dt_real_seconds * self.TIME_SCALE 
+            
+            self.sim_time += dt_sim_minutes
+
+            # 2. Events Input
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: self.running = False
             
+            # 3. Lògica del Món
             self.handle_mechanics()
-            for t in self.active_trains: t.update() # El tren mou, aprèn i es tanca sol
-            self.active_trains = [t for t in self.active_trains if not t.finished]
             
-            if pygame.time.get_ticks() - self.last_spawn > 500:
-                self.last_spawn = pygame.time.get_ticks()
-                #self.spawn_random_train()
-                #self.spawn_origin_train()
-                self.spawn_line_train('R1_NORD')
+            # 4. Spawner
+            if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
+                self.last_spawn = self.sim_time
+                if random.random() < 0.8:
+                    self.spawn_line_train('R1_NORD')
+                else:
+                    self.spawn_random_train()
 
-            # Dibuix delegat
+            # 5. Actualització Trens
+            for t in self.active_trains: t.update(dt_sim_minutes)
+            self.active_trains = [t for t in self.active_trains if not t.finished]
+
+            # 6. Dibuix
             self.screen.fill((240, 240, 240))
-            for e in self.all_edges: e.draw(self.screen) #
-            for n in self.nodes.values(): n.draw(self.screen) #
-            for t in self.active_trains: t.draw(self.screen) #
+            for e in self.all_edges: e.draw(self.screen)
+            for n in self.nodes.values(): n.draw(self.screen)
+            for t in self.active_trains: t.draw(self.screen)
+            
+            # HUD Debug
+            debug_font = pygame.font.SysFont("Arial", 16)
+            # Format: Dies : Hores : Minuts
+            days = int(self.sim_time // 1440)
+            hours = int((self.sim_time % 1440) // 60)
+            mins = int(self.sim_time % 60)
+            
+            time_str = f"Dia {days} | {hours:02d}:{mins:02d}"
+            msg = debug_font.render(f"{time_str} | Trens: {len(self.active_trains)} | Scale: x{self.TIME_SCALE}", True, (0,0,0))
+            self.screen.blit(msg, (10, 10))
+
             pygame.display.flip()
-            self.clock.tick(60)
+            
         pygame.quit()
 
 if __name__ == "__main__":
