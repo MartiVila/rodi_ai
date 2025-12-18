@@ -98,16 +98,45 @@ class RodaliesAI:
             u.neighbors[v.id] = [e0, e1]
 
     def build_R1(self):
-        r1_line = [('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
+        # 1. Definir connexions físiques (com tenies abans)
+        connections = [('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
                    ('SANTJOANDESPI', 'CORNELLA'), ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
                    ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'), ('BARCELONASANTS', 'PLACADECATALUNYA'),
                    ('PLACADECATALUNYA', 'ARCDETRIOMF'), ('ARCDETRIOMF', 'BARCELONACLOTARAGO')]
-        for s1, s2 in r1_line: self.add_connection(s1, s2)
+        for s1, s2 in connections: self.add_connection(s1, s2)
+        
+        # 2. Definir la RUTA lògica de la línia (seqüència ordenada d'estacions)
+        # Això permetrà crear trens que sàpiguen on anar després de cada parada
+        self.lines = {}
+        self.lines['R1_NORD'] = [
+            'MOLINSDEREI', 'SANTFELIUDELLOBREGAT', 'SANTJOANDESPI', 'CORNELLA', 
+            'LHOSPITALETDELLOBREGAT', 'BARCELONASANTS', 'PLACADECATALUNYA', 
+            'ARCDETRIOMF', 'BARCELONACLOTARAGO'
+        ]
+        # Opcional: Ruta inversa
+        self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
+
+    def spawn_line_train(self, line_name):
+        """Genera un tren que recorrerà tota la línia especificada."""
+        if line_name not in self.lines: return
+
+        # Convertim noms d'estacions a objectes Node
+        station_names = self.lines[line_name]
+        route_nodes = []
+        for name in station_names:
+            if name in self.nodes:
+                route_nodes.append(self.nodes[name])
+        
+        # Només creem el tren si la ruta és vàlida i té almenys 2 estacions
+        if len(route_nodes) > 1:
+            # Passem la llista completa de nodes al tren
+            new_train = Train(self.brain, route_nodes)
+            self.active_trains.append(new_train)
 
     def handle_mechanics(self):
         """Actualitza l'estat de les arestes delegant a la seva pròpia gestió interna."""
         now = pygame.time.get_ticks()
-        if now - self.last_reset > 20000:
+        if now - self.last_reset > 12000:
             self.last_reset = now
             for e in self.all_edges: 
                 e.edge_type = EdgeType.NORMAL
@@ -130,6 +159,7 @@ class RodaliesAI:
         # El tren rep l'agent i pren la seva pròpia decisió al néixer
         self.active_trains.append(Train(self.brain, start, target, start.neighbors[target_id]))
 
+
     def run(self):
         while self.running:
             for event in pygame.event.get():
@@ -141,7 +171,9 @@ class RodaliesAI:
             
             if pygame.time.get_ticks() - self.last_spawn > 500:
                 self.last_spawn = pygame.time.get_ticks()
-                self.spawn_random_train()
+                #self.spawn_random_train()
+                #self.spawn_origin_train()
+                self.spawn_line_train('R1_NORD')
 
             # Dibuix delegat
             self.screen.fill((240, 240, 240))

@@ -1,67 +1,77 @@
 import pygame
 import math
-from .EdgeType import EdgeType # Import necessari per a get_state() 
+from .EdgeType import EdgeType
+
 class Train:
-    def __init__(self, agent, start_node, target_node, available_edges):
+    # Canvi: Ara rep 'route_nodes' (llista de Nodes) en lloc de start/target individuals
+    def __init__(self, agent, route_nodes):
         self.agent = agent
-        self.node = start_node
-        self.target = target_node
-        self.edges = available_edges # [Edge_via_0, Edge_via_1]
+        self.route = route_nodes 
+        self.route_index = 0 # Estem a l'estació 0 de la ruta
         
+        self.node = self.route[self.route_index]
+        self.target = self.route[self.route_index + 1]
+        
+        self.edges = [] 
         self.current_edge = None
         self.progress = 0
         self.travel_time = 0
         self.finished = False
-        self.state_at_departure = None
-        self.action_taken = None
+        
+        # Inicialitzem el primer tram
+        self.setup_segment()
 
-        # --- LÒGICA DE DECISIÓ (COMUNICACIÓ AMB AGENT) ---
-        self.decide_route()
+    def setup_segment(self):
+        """Prepara el tren per anar del node actual al següent target."""
+        # Busquem les vies que connecten el node actual amb el target
+        if self.target.id in self.node.neighbors:
+            self.edges = self.node.neighbors[self.target.id]
+            self.decide_route()
+        else:
+            # Error de seguretat si no hi ha connexió
+            self.finished = True
 
     def get_state(self):
-        """Construeix l'estat que veu l'agent: On soc, on vaig, com estan les vies"""
         status_0 = "OK" if self.edges[0].edge_type == EdgeType.NORMAL else "BAD"
         status_1 = "OK" if self.edges[1].edge_type == EdgeType.NORMAL else "BAD"
         return (self.node.id, self.target.id, status_0, status_1)
 
     def decide_route(self):
-        # 1. Preguntar a l'agent
         self.state_at_departure = self.get_state()
         self.action_taken = self.agent.choose_action(self.state_at_departure)
-        
-        # 2. Executar decisió
         self.current_edge = self.edges[self.action_taken]
-        
-        # Debug
-        # print(f"Tren a {self.node.name}: Tria via {self.action_taken} ({self.state_at_departure[2]}/{self.state_at_departure[3]})")
 
     def update(self):
         if self.finished: return
 
-        # Avançar
         self.progress += self.current_edge.speed
-        self.travel_time += 1 # Comptem frames com a temps
+        self.travel_time += 1 
 
         if self.progress >= 1.0:
-            self.progress = 1.0
-            self.finished = True
-            
-            # --- FEEDBACK A L'AGENT (RECOMPENSA) ---
-            # La recompensa és negativa (cost temporal). Volem minimitzar temps.
-            # Normalitzem una mica per no tenir valors gegants (ex: -100 punts)
+            # --- 1. Aprenentatge del tram completat ---
             reward = -self.travel_time 
-            
-            # L'estat següent seria estar al node destí (sense moure's encara)
-            next_state = (self.target.id, None, "None", "None") 
-            
+            next_state = (self.target.id, "None", "None", "None") # Simplificació
             self.agent.learn(self.state_at_departure, self.action_taken, reward, next_state)
+
+            # --- 2. Lògica de següent estació ---
+            self.progress = 0
+            self.travel_time = 0
             
-            # print(f"Tren arribat! Reward: {reward:.1f}. Q-Table updated.")
+            # Ens movem al node on acabem d'arribar
+            self.node = self.target
+            self.route_index += 1
+
+            # Comprovem si queden més estacions a la ruta
+            if self.route_index < len(self.route) - 1:
+                self.target = self.route[self.route_index + 1]
+                self.setup_segment() # Preparem el següent tram
+            else:
+                self.finished = True # Final de trajecte
 
     def draw(self, screen):
+        # (El codi de draw es manté idèntic, ja que depèn de current_edge i progress)
         if not self.current_edge: return
         
-        # Calcular posició amb l'offset de la via
         off = 3 if self.current_edge.track_id == 0 else -3
         dx = self.current_edge.node2.x - self.current_edge.node1.x
         dy = self.current_edge.node2.y - self.current_edge.node1.y
@@ -70,7 +80,6 @@ class Train:
         perp_x = -dy / dist
         perp_y = dx / dist
         
-        # Inici i final desplaçats
         x1 = self.current_edge.node1.x + perp_x * off
         y1 = self.current_edge.node1.y + perp_y * off
         x2 = self.current_edge.node2.x + perp_x * off
