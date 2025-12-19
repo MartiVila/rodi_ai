@@ -13,11 +13,19 @@ class Edge:
         self.track_id = track_id
         
         # Càlcul de distància física
+
+        # AQUI NOMES FA UN CÀLCUL GEOMÈTRIC
+        # TENIM DISTÀNCIES OI?
+        # TODO: Millorar amb coordenades reals?
         dx = self.node2.x - self.node1.x
         dy = self.node2.y - self.node1.y
         self.pixel_length = math.sqrt(dx*dx + dy*dy)
         self.real_length_km = self.pixel_length * Edge.PIXELS_TO_KM
         
+
+        # Cada edge, segons la distància i tipus, té unes propietats
+        # Expected minutes: quant triga IDEALMENT un tren a recórrer aquest tram
+        # Max speed: velocitat màxima per aquest tram (km/h)
         self.update_properties()
 
     def update_properties(self):
@@ -36,7 +44,6 @@ class Edge:
         else:
             self.expected_minutes = 999 
 
-        # --- CORRECCIÓ CLAU ---
         # Velocitat de visualització (0.0 a 1.0 per minut de simulació)
         # Si dt_minutes=1 (passa un minut), volem recórrer 1/expected_minutes del tram.
         if self.expected_minutes > 0:

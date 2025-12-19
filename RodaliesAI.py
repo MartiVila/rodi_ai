@@ -21,13 +21,14 @@ class RodaliesAI:
     #RESET_INTERVAL = 1440  # Cada quants minuts es reseteja la via (24h)
     #CHAOS_INTERVAL = 600   # Cada quants minuts hi ha incidents (10h)
 
-    RESET_INTERVAL = 210  # Cada quants minuts es reseteja la via (24h)
-    CHAOS_INTERVAL = 60   # Cada quants minuts hi ha incidents (10h)
+    RESET_INTERVAL = 210  # Cada quants minuts es reseteja la via (3.5h)
+    CHAOS_INTERVAL = 60   # Cada quants minuts hi ha incidents (1h)
     
     def __init__(self):
         pygame.init()
         self.width, self.height = 1400, 900
         self.screen = pygame.display.set_mode((self.width, self.height))
+        #self.screen = pygame.display.toggle_fullscreen()
         pygame.display.set_caption("Rodalies AI - Q-Learning Train Control")
         self.clock = pygame.time.Clock()
         self.running = True
@@ -140,7 +141,16 @@ class RodaliesAI:
         ]
         self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
 
+
+
     def calculate_schedule(self, route_nodes, start_time):
+        """
+        Cada cop que un tren es crea, es calcula el seu horari basat en els nodes de la ruta i el temps d'inici.
+        Aquest horari es guarda en un diccionari on les claus son els IDs dels nodes i els valors son els temps d'arribada previstos.
+        
+        :param route_nodes: Llista de nodes que componen la ruta del tren.
+        :param start_time: Temps d'inici del tren en minuts de simulació.   
+        """ 
         schedule = {}
         current_time = start_time
         if route_nodes:
@@ -177,7 +187,10 @@ class RodaliesAI:
         self.active_trains.append(Train(self.brain, route_nodes, schedule, self.sim_time))
 
     def handle_mechanics(self):
-        """Gestiona esdeveniments basats en el temps de simulació."""
+        """
+        Gestiona esdeveniments basats en el temps de simulació.
+        És a dir, els elements pseudoperiodics com el reset diari de la via i la introducció d'obstacles aleatoris.
+        """
         # Reset diari (neteja d'obstacles)
         if self.sim_time - self.last_reset > self.RESET_INTERVAL:
             self.last_reset = self.sim_time
