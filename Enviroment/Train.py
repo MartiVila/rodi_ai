@@ -66,7 +66,6 @@ class Train:
     def setup_segment(self):
         """
         Mètode per a canvi de via
-        
         """
         if self.target.id in self.node.neighbors:
             possible_edges = self.node.neighbors[self.target.id]
@@ -95,6 +94,10 @@ class Train:
         Metode d'actualització del tren.
         Semblant al mètode heuristica de la pràctica anterior, 
         però ara integrat amb la xarxa ferroviària i el gestor de trànsit.
+
+        Heuristica té dos parts:
+            - Una està aquí
+            -L'altre part és quan arribem a la estació
         
         :param dt_minutes: Delta de temps en minuts des de l'última actualització (Retard)
         """
@@ -191,6 +194,7 @@ class Train:
         if abs(self.delay_global) < 2: self.status = TrainStatus.SENSE_RETARD
         else: self.status = TrainStatus.RETARD_MODERAT
 
+        # HEURISTICA PART 2: Gestió delays
         if self.progress >= 1.0:
             self.arrive_at_station()
 
@@ -215,6 +219,8 @@ class Train:
         """
         Gestió que fem cada cop que sortim d'una aresta/node
         Avisem a centrar (Traffic Manager) 
+        HEURISTICA DE DELAYS
+        Part2
         
         """
         TrafficManager.remove_train(self.id)
