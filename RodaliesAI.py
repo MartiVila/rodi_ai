@@ -276,7 +276,7 @@ class RodaliesAI:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT: self.running = False
                 
-                # 3. Lògica del Món
+                # 3. Lògica del Món (Fenòmens aleatoris)
                 self.handle_mechanics()
                 
                 # 4. Spawner
