@@ -14,7 +14,31 @@ class Train:
     BRAKING = 80.0        
     SAFE_DISTANCE_PCT = 0.05 
 
+    """
+    ############################################################################################
+    ############################################################################################
+
+    Classe base per crear Objectes trens gestionants per Qlearning Agent
+
+    Els trens tenen un delay local i global
+
+    ############################################################################################
+    ############################################################################################
+    
+    """
+
     def __init__(self, agent, route_nodes, scheduled_times, start_time_sim):
+        """
+        Docstring for __init__
+        
+        :param agent: Instancia de Qlearning agent
+        :param route_nodes: Ruta a seguir, llista de nodes 
+        :param scheduled_times: Diccionari {node_id: time_in_minutes}
+        :param start_time_sim: Temps d'inici de la simulació en minuts
+
+        L'agent de tren és una instància compartida entre tots els trens, UN Agent
+        Apren de TOTS els trens
+        """
         self.agent = agent
         self.route = route_nodes
         self.schedule = scheduled_times 
@@ -40,6 +64,10 @@ class Train:
         self.setup_segment()
 
     def setup_segment(self):
+        """
+        Mètode per a canvi de via
+        
+        """
         if self.target.id in self.node.neighbors:
             possible_edges = self.node.neighbors[self.target.id]
             state = self.get_state(possible_edges)
@@ -61,7 +89,15 @@ class Train:
         alert1 = TrafficManager.check_alert(self.node.id, self.target.id, 1)
         return (self.node.id, self.target.id, s0, s1, alert0, alert1)
 
+
     def update(self, dt_minutes):
+        """
+        Metode d'actualització del tren.
+        Semblant al mètode heuristica de la pràctica anterior, 
+        però ara integrat amb la xarxa ferroviària i el gestor de trànsit.
+        
+        :param dt_minutes: Delta de temps en minuts des de l'última actualització (Retard)
+        """
         if self.finished: return
         if self.collision_detected: return 
 
@@ -69,6 +105,7 @@ class Train:
         
         # --- 1. CÀLCUL DE LA VELOCITAT DE PUNTUALITAT ---
         # Quant temps tenim assignat per aquest tram segons horari?
+        # Expected minutes és atribut classe edge, es calcula al init
         scheduled_duration = self.current_edge.expected_minutes
         
         # Quant temps portem en aquest tram?
@@ -78,6 +115,7 @@ class Train:
         time_remaining = scheduled_duration - elapsed_in_segment
         
         # Distància real restant (km)
+        #TODO Realment està en distància real? No sé si estàn bé els pesos
         dist_total_km = self.current_edge.real_length_km
         dist_remaining_km = dist_total_km * (1.0 - self.progress)
         
@@ -156,7 +194,11 @@ class Train:
         if self.progress >= 1.0:
             self.arrive_at_station()
 
+
     def handle_collision(self):
+        """
+        Si estem apunt de Colisionar, es dona el tren per avariat i parem
+        """
         print(f"!!! COL·LISIÓ Tren {self.id} !!!")
         self.collision_detected = True
         self.status = TrainStatus.AVARIAT
@@ -170,6 +212,11 @@ class Train:
         self.agent.learn(state, action, reward, state)
 
     def arrive_at_station(self):
+        """
+        Gestió que fem cada cop que sortim d'una aresta/node
+        Avisem a centrar (Traffic Manager) 
+        
+        """
         TrafficManager.remove_train(self.id)
 
         # Càlcul precís del retard en l'arribada a l'estació

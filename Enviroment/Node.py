@@ -1,8 +1,13 @@
 import pygame
 class Node:
+    """
+    Estructura de dades per a una estació
+    """
     def __init__(self, x, y, node_id, name=""):
+        # Coordenades al mapa
         self.x = x
         self.y = y
+        
         self.id = node_id
         self.name = name
         self.radius = 5

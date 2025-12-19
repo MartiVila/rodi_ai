@@ -54,6 +54,24 @@ class RodaliesAI:
 
         self.load_real_data()
 
+    """
+    ############################################################################################
+    ############################################################################################
+
+    Funcions per:
+     - carregar dades reals d'estacions i coordenades
+     - construir la línia R1 
+     - contruir linies addicionals (si es vol)
+
+    ############################################################################################
+    ############################################################################################
+    
+    """
+
+
+    ############################################################################################
+    ################   Codi per passar de csv a format intern   #################################
+    ############################################################################################
     def _normalize_name(self, name):
         if not isinstance(name, str): return ""
         n = name.lower().replace(' ', '').replace('-', '').replace("'", "")
@@ -74,6 +92,9 @@ class RodaliesAI:
             return float(min(hits, key=lambda x: abs(x - target))) if hits else None
         except: return None
 
+    ############################################################################################
+    ############################   LOADS DE LINIES   ###########################################
+    ############################################################################################
     def load_real_data(self):
         self.r1_connections = [
             ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
@@ -118,6 +139,10 @@ class RodaliesAI:
 
         self.build_R1()
 
+
+    ############################################################################################
+    ############################   Un cop tenim info, carreguem  ###############################
+    ############################################################################################
     def add_connection(self, s1, s2):
         n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
         if n1 in self.nodes and n2 in self.nodes:
@@ -144,6 +169,17 @@ class RodaliesAI:
         self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
 
 
+    """
+    ############################################################################################
+    ############################################################################################
+
+    Funcions de Gestió ferroviària per
+     - Calcular horaris
+     - Spawn de trens
+
+    ############################################################################################
+    ############################################################################################   
+    """
 
     def calculate_schedule(self, route_nodes, start_time):
         """
@@ -188,6 +224,20 @@ class RodaliesAI:
         schedule = self.calculate_schedule(route_nodes, self.sim_time)
         self.active_trains.append(Train(self.brain, route_nodes, schedule, self.sim_time))
 
+
+
+
+    """
+    ############################################################################################
+    ############################################################################################
+
+    Funcions de Pygame per la simulació i gestió del temps:
+     - handle_mechanics : Gestiona esdeveniments Aleatoris (trancament de trens/vies, reseteig diari)
+     - run : Bucle principal de la simulació
+
+    ############################################################################################
+    ############################################################################################   
+    """
     def handle_mechanics(self):
         """Gestiona esdeveniments basats en el temps de simulació."""
         # Reseteig periòdic de vies i incidències
