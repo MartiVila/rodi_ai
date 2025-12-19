@@ -12,6 +12,8 @@ from Enviroment.Edge import Edge
 from Enviroment.Node import Node
 from Enviroment.Train import Train
 import Agent.QlearningAgent as QLearningAgent
+from Enviroment.Train import Train
+from Enviroment.TrafficManager import TrafficManager
 
 class RodaliesAI:
     # --- CONFIGURACIÓ DEL SISTEMA DE TEMPS ---
@@ -38,8 +40,8 @@ class RodaliesAI:
         self.all_edges = []
         self.active_trains = []
         
-        # Agent
-        self.brain = QLearningAgent.QLearningAgent(epsilon=0.2) 
+        self.brain = QLearningAgent.QLearningAgent(epsilon=0.2)
+        self.brain.load_table("q_table.pkl")
 
         # --- SISTEMA DE TEMPS UNIFICAT ---
         # Tot s'inicialitza a 0.0 (minuts de simulació)
@@ -187,16 +189,17 @@ class RodaliesAI:
         self.active_trains.append(Train(self.brain, route_nodes, schedule, self.sim_time))
 
     def handle_mechanics(self):
-        """
-        Gestiona esdeveniments basats en el temps de simulació.
-        És a dir, els elements pseudoperiodics com el reset diari de la via i la introducció d'obstacles aleatoris.
-        """
-        # Reset diari (neteja d'obstacles)
+        """Gestiona esdeveniments basats en el temps de simulació."""
+        # Reseteig periòdic de vies i incidències
         if self.sim_time - self.last_reset > self.RESET_INTERVAL:
             self.last_reset = self.sim_time
+            
             for e in self.all_edges: 
                 e.edge_type = EdgeType.NORMAL
                 e.update_properties()
+            
+            TrafficManager.reset()
+            print(f"Dia nou: Vies i Incidències netejades al minut {int(self.sim_time)}")
         
         # Caos aleatori (obstacles)
         if self.sim_time - self.last_chaos > self.CHAOS_INTERVAL:
@@ -206,55 +209,73 @@ class RodaliesAI:
                 for e in random.sample(normals, 2):
                     e.edge_type = EdgeType.OBSTACLE
                     e.update_properties()
+                    # Nota: No reportem l'obstacle aquí manualment.
+                    # Deixem que el primer tren que el trobi "se'l mengi" i avisi als altres (TrafficManager).
 
     def run(self):
-        while self.running:
-            # 1. Càlcul del temps unificat
-            dt_ms = self.clock.tick(60)       
-            dt_real_seconds = dt_ms / 1000.0          
-            dt_sim_minutes = dt_real_seconds * self.TIME_SCALE 
-            
-            self.sim_time += dt_sim_minutes
+        try:
+            while self.running:
+                # 1. Càlcul del temps unificat
+                dt_ms = self.clock.tick(60)       
+                dt_real_seconds = dt_ms / 1000.0          
+                dt_sim_minutes = dt_real_seconds * self.TIME_SCALE 
+                
+                self.sim_time += dt_sim_minutes
 
-            # 2. Events Input
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT: self.running = False
-            
-            # 3. Lògica del Món
-            self.handle_mechanics()
-            
-            # 4. Spawner
-            if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
-                self.last_spawn = self.sim_time
-                if random.random() < 0.8:
-                    self.spawn_line_train('R1_NORD')
-                else:
-                    self.spawn_random_train()
+                # 2. Events Input
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT: self.running = False
+                
+                # 3. Lògica del Món
+                self.handle_mechanics()
+                
+                # 4. Spawner
+                days = int(self.sim_time // 1440)
+                if days == 0:
+                    if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL//60:
+                        self.last_spawn = self.sim_time
+                        self.spawn_line_train('R1_NORD')
+                if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
+                    self.last_spawn = self.sim_time
+                    if random.random() < 0.8:
+                        self.spawn_line_train('R1_NORD')
+                    else:
+                        self.spawn_random_train()
 
-            # 5. Actualització Trens
-            for t in self.active_trains: t.update(dt_sim_minutes)
-            self.active_trains = [t for t in self.active_trains if not t.finished]
+                
 
-            # 6. Dibuix
-            self.screen.fill((240, 240, 240))
-            for e in self.all_edges: e.draw(self.screen)
-            for n in self.nodes.values(): n.draw(self.screen)
-            for t in self.active_trains: t.draw(self.screen)
-            
-            # HUD Debug
-            debug_font = pygame.font.SysFont("Arial", 16)
-            # Format: Dies : Hores : Minuts
-            days = int(self.sim_time // 1440)
-            hours = int((self.sim_time % 1440) // 60)
-            mins = int(self.sim_time % 60)
-            
-            time_str = f"Dia {days} | {hours:02d}:{mins:02d}"
-            msg = debug_font.render(f"{time_str} | Trens: {len(self.active_trains)} | Scale: x{self.TIME_SCALE}", True, (0,0,0))
-            self.screen.blit(msg, (10, 10))
 
-            pygame.display.flip()
+                # 5. Actualització Trens
+                for t in self.active_trains: t.update(dt_sim_minutes)
+                self.active_trains = [t for t in self.active_trains if not t.finished]
+
+                # 6. Dibuix
+                self.screen.fill((240, 240, 240))
+                for e in self.all_edges: e.draw(self.screen)
+                for n in self.nodes.values(): n.draw(self.screen)
+                for t in self.active_trains: t.draw(self.screen)
+                
+                # HUD Debug
+                debug_font = pygame.font.SysFont("Arial", 16)
+                # Format: Dies : Hores : Minuts
+                days = int(self.sim_time // 1440)
+                hours = int((self.sim_time % 1440) // 60)
+                mins = int(self.sim_time % 60)
+                
+                time_str = f"Dia {days} | {hours:02d}:{mins:02d}"
+                msg = debug_font.render(f"{time_str} | Trens: {len(self.active_trains)} | Scale: x{self.TIME_SCALE}", True, (0,0,0))
+                self.screen.blit(msg, (10, 10))
+
+                pygame.display.flip()
             
-        pygame.quit()
+        except Exception as e:
+            print(f"Error inesperat durant l'execució: {e}")
+        finally:
+            # --- GUARDAR CERVELL ---
+            # Això s'executa tant si tanques manualment com si hi ha un error
+            self.brain.save_table("q_table.pkl")
+            pygame.quit()
+            print("Simulació finalitzada i dades guardades.")
 
 if __name__ == "__main__":
     RodaliesAI().run()
