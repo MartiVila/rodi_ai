@@ -58,6 +58,17 @@ class RodaliesAI:
 
         self.load_real_data()
 
+    ############################################################################################
+    #####################   Codis varis per gestió Pygame   ####################################
+    ############################################################################################
+    def get_monitor_size(self,scale=0.9):
+        """Return scaled monitor width/height, initializing pygame display if needed."""
+        if not pygame.get_init():
+            pygame.init()
+        info = pygame.display.Info()
+        return int(info.current_w * scale), int(info.current_h * scale)
+
+
     """
     ############################################################################################
     ############################################################################################
@@ -72,14 +83,6 @@ class RodaliesAI:
     
     """
 
-
-    ##GET MONITOR SIZE
-    def get_monitor_size(self,scale=0.9):
-        """Return scaled monitor width/height, initializing pygame display if needed."""
-        if not pygame.get_init():
-            pygame.init()
-        info = pygame.display.Info()
-        return int(info.current_w * scale), int(info.current_h * scale)
 
     ############################################################################################
     ################   Codi per passar de csv a format intern   #################################
