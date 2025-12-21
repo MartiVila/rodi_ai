@@ -1,0 +1,286 @@
+{
+    "('79200', '79607', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 45.24378332295464
+    },
+    "('79607', '79606', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 32.85519119831563
+    },
+    "('79606', '79605', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 30.91816250812184,
+        "VIA_1": 8.079180473431338
+    },
+    "('79605', '79608', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 31.267005461204686,
+        "VIA_1": 7.678505497499689
+    },
+    "('79608', '79604', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 36.85528345728042,
+        "VIA_1": 0.0
+    },
+    "('79604', '79603', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 37.240394459802324
+    },
+    "('79603', '79602', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 37.55168310311232
+    },
+    "('79602', '79601', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 14.157625134746212,
+        "VIA_1": 27.858128433979015
+    },
+    "('79601', '79600', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 39.19836484705324,
+        "VIA_1": 0.0
+    },
+    "('79600', '79502', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 5.805913573587006,
+        "VIA_1": 23.5421574215571
+    },
+    "('79502', '79501', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 36.64255582599063,
+        "VIA_1": 8.780218492846634
+    },
+    "('79501', '79500', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 24.113343466483325,
+        "VIA_1": 12.329497776158998
+    },
+    "('79500', '79412', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 35.14434743383202,
+        "VIA_1": 0.0
+    },
+    "('79412', '79410', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 5.893605230729229,
+        "VIA_1": 18.203365919586364
+    },
+    "('79410', '79409', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 42.80685809856208
+    },
+    "('79409', '79408', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 7.121012661231312,
+        "VIA_1": 12.17913255521184
+    },
+    "('79408', '79407', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 8.045010296701212,
+        "VIA_1": 23.647896989613606
+    },
+    "('79407', '79406', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 29.645869302796466,
+        "VIA_1": 0.0
+    },
+    "('79406', '79405', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 29.801811286093773,
+        "VIA_1": 0.0
+    },
+    "('79405', '79404', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 24.126157627929153,
+        "VIA_1": 0.0
+    },
+    "('79404', '79403', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 6.2216413526037115,
+        "VIA_1": 18.97641674344029
+    },
+    "('72300', '72301', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 12.097344406223478,
+        "VIA_1": 53.44713446598727
+    },
+    "('79403', '79009', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 24.61791498049841,
+        "VIA_1": 0.0
+    },
+    "('72301', '72302', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 53.21790173723826,
+        "VIA_1": 12.5464819602517
+    },
+    "('79009', '78804', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 24.80210231470907,
+        "VIA_1": 0.0
+    },
+    "('72302', '72303', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 61.102356215987946
+    },
+    "('78804', '78805', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 24.81022410539512
+    },
+    "('72303', '72305', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 20.014680602026203,
+        "VIA_1": 46.8854191919836
+    },
+    "('78805', '71801', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 24.95721198109304,
+        "VIA_1": 0.0
+    },
+    "('72305', '71801', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 11.61831732744053,
+        "VIA_1": 55.11858191758666
+    },
+    "('71801', '72305', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 6.427672109032599,
+        "VIA_1": 19.6166224601036
+    },
+    "('71801', '78805', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 55.375855096593185,
+        "VIA_1": 10.999834553502232
+    },
+    "('72305', '72303', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 25.730008478992573,
+        "VIA_1": 0.0
+    },
+    "('78805', '78804', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 55.291999095530876,
+        "VIA_1": 12.52349356063362
+    },
+    "('72303', '72302', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 8.392452151502482,
+        "VIA_1": 19.659470685663408
+    },
+    "('78804', '79009', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 55.60703578266673,
+        "VIA_1": 12.59688837971995
+    },
+    "('72302', '72301', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 26.54293434264936
+    },
+    "('79009', '79403', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 63.603084731283246,
+        "VIA_1": 0.0
+    },
+    "('72301', '72300', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 20.7372884464269,
+        "VIA_1": 6.819970593693029
+    },
+    "('79403', '79404', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 9.747161567534071,
+        "VIA_1": 56.560151859153315
+    },
+    "('79404', '79405', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 10.651047921826981,
+        "VIA_1": 48.83568984334598
+    },
+    "('79405', '79406', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 64.75616541506692
+    },
+    "('79406', '79407', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 49.70963971636008,
+        "VIA_1": 9.93617086682348
+    },
+    "('79407', '79408', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 57.38732735146894,
+        "VIA_1": 10.731508895377068
+    },
+    "('79408', '79409', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 49.662151122345776
+    },
+    "('79409', '79410', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 66.51829986161724,
+        "VIA_1": 0.0
+    },
+    "('79410', '79412', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 8.738063742271805,
+        "VIA_1": 42.61758882217127
+    },
+    "('79412', '79500', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 21.443574618118653,
+        "VIA_1": 49.755218144957205
+    },
+    "('79500', '79501', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 66.05543816479826
+    },
+    "('79501', '79502', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 66.75109665632891
+    },
+    "('79502', '79600', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 42.54907426526014,
+        "VIA_1": -21.993110538533173
+    },
+    "('79600', '79601', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -7.111613469859922,
+        "VIA_1": 42.697478071555516
+    },
+    "('79601', '79602', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 34.68031270286611,
+        "VIA_1": 5.896486912712094
+    },
+    "('79602', '79603', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -6.685746152412143,
+        "VIA_1": 43.584245408682776
+    },
+    "('79603', '79604', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 15.423468990253747,
+        "VIA_1": 34.49753836744519
+    },
+    "('79604', '79608', <EdgeType.NORMAL: 1>, <EdgeType.OBSTACLE: 2>)": {
+        "VIA_0": 9.357315092563653,
+        "VIA_1": 0.0
+    },
+    "('79608', '79605', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -98.46718475547267,
+        "VIA_1": 21.012678203551374
+    },
+    "('79605', '79606', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -78.2814811535359,
+        "VIA_1": 12.487061562119898
+    },
+    "('79606', '79607', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -127.38565851854808,
+        "VIA_1": -77.57392350258127
+    },
+    "('79607', '79200', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": -111.71697578257977,
+        "VIA_1": -73.74022309735213
+    },
+    "('79604', '79608', <EdgeType.NORMAL: 1>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 11.70265568475257,
+        "VIA_1": -85.70686231249974
+    },
+    "('79410', '79412', <EdgeType.NORMAL: 1>, <EdgeType.OBSTACLE: 2>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 16.85124684712104
+    },
+    "('79607', '79606', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 10.273386490877606
+    },
+    "('79606', '79607', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 18.06924148144911
+    },
+    "('79412', '79410', <EdgeType.NORMAL: 1>, <EdgeType.OBSTACLE: 2>)": {
+        "VIA_0": 11.826974409151145,
+        "VIA_1": 0.0
+    },
+    "('79406', '79407', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 8.403271026056814
+    },
+    "('79409', '79408', <EdgeType.NORMAL: 1>, <EdgeType.OBSTACLE: 2>)": {
+        "VIA_0": 11.979432555211822,
+        "VIA_1": 0.0
+    },
+    "('79408', '79409', <EdgeType.NORMAL: 1>, <EdgeType.OBSTACLE: 2>)": {
+        "VIA_0": 16.783749572993184,
+        "VIA_1": 0.0
+    },
+    "('79502', '79600', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 17.406051953453698
+    },
+    "('79404', '79405', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 8.288641903297957
+    },
+    "('79600', '79502', <EdgeType.OBSTACLE: 2>, <EdgeType.NORMAL: 1>)": {
+        "VIA_0": 0.0,
+        "VIA_1": 5.865913573587022
+    }
+}
