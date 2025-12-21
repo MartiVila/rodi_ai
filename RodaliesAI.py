@@ -29,7 +29,7 @@ class RodaliesAI:
     
     def __init__(self):
         pygame.init()
-        win_w, win_h = self.get_monitor_size(1.0)
+        win_w, win_h = self.get_monitor_size(0.8)
         map_w, map_h = int(win_w * 0.85), int(win_h * 0.85)
 
         self.width, self.height = win_w, win_h
