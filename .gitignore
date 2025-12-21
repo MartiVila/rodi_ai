@@ -84,6 +84,7 @@ poetry.lock
 /data/*.sqlite
 /data/*.db
 /data/*.geojson
+/data/*.json
 
 # Optional: ignore compiled extensions
 *.dylib
