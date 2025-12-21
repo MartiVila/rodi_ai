@@ -1,3 +1,4 @@
+from multiprocessing.util import info
 import pygame
 import random
 import pandas as pd
@@ -28,7 +29,10 @@ class RodaliesAI:
     
     def __init__(self):
         pygame.init()
-        self.width, self.height = 1400, 900
+        win_w, win_h = self.get_monitor_size(1.0)
+        map_w, map_h = int(win_w * 0.85), int(win_h * 0.85)
+
+        self.width, self.height = win_w, win_h
         self.screen = pygame.display.set_mode((self.width, self.height))
         #self.screen = pygame.display.toggle_fullscreen()
         pygame.display.set_caption("Rodalies AI - Q-Learning Train Control")
@@ -68,6 +72,14 @@ class RodaliesAI:
     
     """
 
+
+    ##GET MONITOR SIZE
+    def get_monitor_size(self,scale=0.9):
+        """Return scaled monitor width/height, initializing pygame display if needed."""
+        if not pygame.get_init():
+            pygame.init()
+        info = pygame.display.Info()
+        return int(info.current_w * scale), int(info.current_h * scale)
 
     ############################################################################################
     ################   Codi per passar de csv a format intern   #################################
@@ -282,15 +294,15 @@ class RodaliesAI:
                 # 4. Spawner
                 days = int(self.sim_time // 1440)
                 if days == 0:
-                    if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL//60:
+                    if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
                         self.last_spawn = self.sim_time
                         self.spawn_line_train('R1_NORD')
                 if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
                     self.last_spawn = self.sim_time
                     if random.random() < 0.8:
                         self.spawn_line_train('R1_NORD')
-                    else:
-                        self.spawn_random_train()
+                    #else:
+                        #self.spawn_random_train()
 
                 
 
