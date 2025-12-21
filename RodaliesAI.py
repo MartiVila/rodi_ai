@@ -336,6 +336,10 @@ class RodaliesAI:
             # --- GUARDAR CERVELL ---
             # Això s'executa tant si tanques manualment com si hi ha un error
             self.brain.save_table("q_table.pkl")
+            self.brain.save_table_json("q_table.json")
+
+
+
             pygame.quit()
             print("Simulació finalitzada i dades guardades.")
 

@@ -2,6 +2,7 @@ import random
 import numpy as np
 import pickle  
 import os      
+import json
 
 class QLearningAgent:
     def __init__(self, learning_rate=0.1, discount_factor=0.9, epsilon=0.1):
@@ -64,6 +65,16 @@ class QLearningAgent:
             print(f"[Agent] Q-Table guardada correctament a '{filename}'. Entrades: {len(self.q_table)}")
         except Exception as e:
             print(f"[Error] No s'ha pogut guardar la Q-Table: {e}")
+
+    def save_table_json(self, filename="q_table.json"):
+        """Guarda la Q-Table en un fitxer .json amb claus serialitzades"""
+        try:
+            serializable_table = {str(state): values for state, values in self.q_table.items()}
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(serializable_table, f, ensure_ascii=False, indent=2)
+            print(f"[Agent] Q-Table guardada en JSON a '{filename}'. Entrades: {len(self.q_table)}")
+        except Exception as e:
+            print(f"[Error] No s'ha pogut guardar la Q-Table en JSON: {e}")
 
     def load_table(self, filename="q_table.pkl"):
         """Carrega la Q-Table des d'un fitxer .pkl si existeix"""
