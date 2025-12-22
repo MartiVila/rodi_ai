@@ -2,48 +2,43 @@ import random
 import numpy as np
 import pickle  
 import os      
+from collections import defaultdict
+from ..Enviroment import Datas
 
 class QLearningAgent:
-    def __init__(self, learning_rate=0.1, discount_factor=0.9, epsilon=0.1):
-
-        # Hiperparàmetres
-        self.lr = learning_rate
-        self.gamma = discount_factor
+    def __init__(self, alpha=0.05, gamma=0.95, epsilon=0.1):
+        self.q = defaultdict(float)
+        self.alpha = alpha
+        self.gamma = gamma
         self.epsilon = epsilon
-        self.q_table = {} 
 
-    def get_q_value(self, state, action):
-        return self.q_table.get(state, [0.0, 0.0])[action]
+    def discretize_diff(self, diff):
+        # Discretización fina para distinguir pequeñas desviaciones
+        if diff < -1:
+            return -2  # Muy adelantado
+        elif diff == -1:
+            return -1  # Ligeramente adelantado
+        elif diff == 0:
+            return 0   # Perfecto (a tiempo)
+        elif diff == 1:
+            return 1   # Ligeramente retrasado
+        else:  # diff > 1
+            return 2   # Muy retrasado
 
-    def choose_action(self, state):
-        """
-        Elecció de vies. Vies hardcodeades a 0 i 1.
-        #TODO Fer num_vies dinàmic
-
-
-        :param state: L'estat actual del tren
-        :return: L'acció triada (0 o 1)
-        """
-
-
+    def action(self, state):
+        """state = (origen, destino, diff_discretized, is_blocked)"""
         if random.random() < self.epsilon:
-            return random.choice([0, 1])
-        
-        q_values = self.q_table.get(state, [0.0, 0.0])
-        if q_values[0] == q_values[1]:
-            return random.choice([0, 1])
-        return np.argmax(q_values)
+            return random.choice(list(Datas.AGENT_ACTIONS.keys()))
+        qs = [self.q[(state, a)] for a in Datas.AGENT_ACTIONS]
+        return qs.index(max(qs))
 
-    def learn(self, state, action, reward, next_state):
-        current_q = self.get_q_value(state, action)
-        next_max_q = np.max(self.q_table.get(next_state, [0.0, 0.0]))
-        
-        new_q = current_q + self.lr * (reward + self.gamma * next_max_q - current_q)
-        
-        if state not in self.q_table:
-            self.q_table[state] = [0.0, 0.0]
-        
-        self.q_table[state][action] = new_q
+    def update(self, s, a, r, s2):
+        if s2 is None:
+            # Estado terminal
+            self.q[(s, a)] += self.alpha * (r - self.q[(s, a)])
+        else:
+            max_q_next = max(self.q[(s2, a2)] for a2 in Datas.AGENT_ACTIONS)
+            self.q[(s, a)] += self.alpha * (r + self.gamma * max_q_next - self.q[(s, a)])
 
 
 
