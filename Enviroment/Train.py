@@ -80,6 +80,57 @@ class Train:
         self.progress = 0.0
         self.last_departure_time = start_delay
 
+    def update(self, dt):
+        """
+        Actualitza l'estat del tren en funció del temps transcorregut (dt).
+        Gestiona el moviment visual (interpolació) i el canvi lògic d'estació.
+        """
+        if self.finished: return
+
+        # 1. Obtenir el tram actual (Origen -> Destí)
+        segment = self.current_segment()
+        if not segment:
+            self.finished = True
+            return
+        
+        origin_name, target_name = segment
+
+        # 2. Inicialització Visual (Només quan entrem en un nou tram)
+        # Necessitem 'nodes_map' que hem injectat en el pas anterior
+        if self.node is None or self.target is None:
+            if hasattr(self, 'nodes_map') and self.nodes_map:
+                self.node = self.nodes_map.get(origin_name)
+                self.target = self.nodes_map.get(target_name)
+                
+                # Determinar durada del trajecte per calcular la velocitat visual
+                # Si no troba el temps al diccionari, assumeix 3 minuts per defecte
+                self.current_travel_duration = Datas.R1_TIME.get(segment, 3.0)
+            else:
+                # Si no tenim mapa, no podem calcular posició visual
+                return
+
+        # 3. Avançar el progrés (Interpolació Lineal)
+        # dt són els minuts simulats que han passat des de l'últim frame
+        if self.current_travel_duration > 0:
+            self.progress += dt / self.current_travel_duration
+        else:
+            self.progress = 1.0 # Salt instantani si durada és 0
+
+        # 4. Comprovar arribada a l'estació destí
+        if self.progress >= 1.0:
+            # Hem arribat: passem al següent índex de la ruta
+            self.idx += 1
+            self.progress = 0.0
+            
+            # Actualitzem temps lògics (simplificat per visualització)
+            self.scheduled_time += self.current_travel_duration
+            self.real_time += self.current_travel_duration 
+            
+            # El destí actual passa a ser el nou origen
+            self.node = self.target
+            self.target = None # Forcem a buscar el següent target al pròxim update
+
+
     def current_segment(self):
         """Retorna el segmento actual (origen, destino) o None si terminó"""
         if self.idx >= len(self.route) - 1:

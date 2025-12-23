@@ -198,10 +198,35 @@ class Simulating_Agent:
 
     def spawn_random_train(self):
         t_id = len(self.active_trains)
-        # Assignar el cervell global al tren
+        
+        # 1. Crear el tren
         new_train = Train(t_id, start_delay=self.sim_time)
-        new_train.agent = self.brain # Compartir la Q-Table
+        new_train.agent = self.brain 
+        
+        # 2. FIX: Assignar una ruta (R1 Nord o Sud aleatòriament)
+        # Necessari perquè el tren sàpiga quines estacions ha de recórrer
+        route_name = random.choice(list(self.lines.keys())) # 'R1_NORD' o 'R1_SUD'
+        new_train.route = self.lines[route_name]
+        
+        # 3. FIX CRÍTIC: Injectar el mapa visual al tren
+        # El tren necessita accedir a self.nodes per llegir .x i .y
+        # Assumim que la classe Train buscarà les coordenades en un atribut tipus .nodes_map o similar
+        # Si la classe Train no té aquest atribut, l'afegim dinàmicament aquí:
+        new_train.nodes_map = self.nodes 
+        
+        # 4. Inicialització segura de la posició visual inicial
+        # Per evitar crash en el primer draw() abans del primer update()
+        try:
+            start_station_name = new_train.route[0]
+            if start_station_name in self.nodes:
+                start_node = self.nodes[start_station_name]
+                new_train.x = start_node.x
+                new_train.y = start_node.y
+        except Exception as e:
+            print(f"Error inicialitzant posició tren: {e}")
+
         self.active_trains.append(new_train)
+        print(f"Tren {t_id} generat a la ruta {route_name} al minut {self.sim_time:.1f}")
 
     def handle_mechanics(self):
         if self.sim_time - self.last_reset > self.RESET_INTERVAL:
