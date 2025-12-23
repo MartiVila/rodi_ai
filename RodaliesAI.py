@@ -91,15 +91,6 @@ class Simulating_Agent:
         gamma = config['gamma'] if config else 0.95
         epsilon = config['epsilon_start'] if config else 0.2
 
-        self.brain = QLearningAgent.QLearningAgent(epsilon=epsilon, alpha=alpha, gamma=gamma)
-        
-        # Intentar carregar taula existent, si no, comença amb els paràmetres triats
-        try:
-            self.brain.load_table("q_table.pkl")
-            print("Taula Q carregada correctament.")
-        except:
-            print("No s'ha trobat taula prèvia, iniciant des de zero.")
-
         # --- SISTEMA DE TEMPS UNIFICAT ---
         self.sim_time = 0.0
         self.last_chaos = self.sim_time
@@ -201,7 +192,7 @@ class Simulating_Agent:
         
         # 1. Crear el tren
         new_train = Train(t_id, start_delay=self.sim_time)
-        new_train.agent = self.brain 
+        #new_train.agent = self.brain 
         
         # 2. FIX: Assignar una ruta (R1 Nord o Sud aleatòriament)
         # Necessari perquè el tren sàpiga quines estacions ha de recórrer
@@ -289,7 +280,8 @@ class Simulating_Agent:
         except Exception as e:
             print(f"Error inesperat durant l'execució: {e}")
         finally:
-            self.brain.save_table("q_table.pkl")
+            for train in self.active_trains:
+                train.save_table("Agent/Qtables/q_table.pkl")
             pygame.quit()
             print("Simulació finalitzada i dades guardades.")
 
@@ -468,7 +460,7 @@ def train_console_mode(config):
     history_rewards = []
     
     for ep in range(episodes):
-        # --- FORMULES DE DECAY OPTIMITZADES (del teu altre fitxer) ---
+        # --- FORMULES DE DECAY OPTIMITZADES ---
         # Alpha decay dinàmic
         current_alpha = alpha_start * (0.98 ** (ep / 100))
         
@@ -510,11 +502,12 @@ def train_console_mode(config):
     print("\nEntrenament completat.")
     
     # Guardar resultats
-    os.makedirs("multiAgentData", exist_ok=True)
+    os.makedirs("Agent/Plots", exist_ok=True)
+    os.makedirs("Agent/Qtables", exist_ok=True)
     
     # 1. Guardar Q-Tables (En guardem una general com q_table.pkl per al visual)
     # Assumim agents cooperatius/similars, guardem la del primer (o fem merge)
-    train.agents[0].save_table("q_table.pkl")
+    train.agents[0].save_table("Agent/Qtables/q_table.pkl")
     print("Taula Q principal guardada a 'q_table.pkl' (per ús visual)")
     
     # 2. Gràfica
@@ -524,7 +517,7 @@ def train_console_mode(config):
     plt.xlabel("Episodis")
     plt.ylabel("Reward Acumulat")
     plt.grid(True, alpha=0.3)
-    plt.savefig("multiAgentData/training_plot.png")
+    plt.savefig("Agent/Plots/training_plot.png")
     print("Gràfica guardada a 'multiAgentData/training_plot.png'")
 
 
@@ -561,13 +554,10 @@ if __name__ == "__main__":
     print("\n" + "#"*60)
     print("       RODALIES AI - SYSTEM MANAGER")
     print("#"*60)
-    
-    # 1. Primer seleccionem l'estratègia
-    config = select_strategy()
-    print(f"\nEstratègia carregada: {config['name']}")
-    print("-" * 40)
+    print()
+    print()
 
-    # 2. Després seleccionem el mode
+    # 1. Primer seleccionem el mode
     print("MODES DE FUNCIONAMENT:")
     print("1. SIMULACIÓ VISUAL (Pygame)")
     print("   -> Executa visualment usant els paràmetres de l'estratègia.")
@@ -577,6 +567,13 @@ if __name__ == "__main__":
     
     opcio = input("\nSelecciona mode (1 o 2): ").strip()
     
+
+    # 2. Després seleccionem l'estratègia
+    config = select_strategy()
+    print(f"\nEstratègia carregada: {config['name']}")
+    print("-" * 40)
+
+    # 3. Per últim seleccionem mode
     if opcio == "2":
         train_console_mode(config)
     else:

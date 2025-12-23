@@ -1,5 +1,10 @@
 import pygame
 import math
+import os
+import json
+import pickle
+import sys
+from collections import defaultdict
 from.Datas import Datas
 # [MODIFICACIÓ] Ajusta els imports segons la teva estructura real
 from .EdgeType import EdgeType
@@ -42,7 +47,11 @@ class Train:
         
         # [MODIFICACIÓ] Cada tren instancia el seu propi agent
         self.agent = QlearningAgent.QLearningAgent()
-        
+        if os.path.exists("q_table.pkl"):
+            self.agent.load_table("q_table.pkl")
+        elif os.path.exists("Agent/Qtables/q_table.pkl"):
+            self.agent.load_table("Agent/Qtables/q_table.pkl")
+
         # Seleccionar ruta: si no se especifica, usar basada en ID
         if route_idx is None:
             route_idx = train_id % len(Datas.R1_ROUTES)
@@ -168,3 +177,15 @@ class Train:
         cur_y = start_y + dy * safe_progress + perp_y * off
         
         pygame.draw.circle(screen, color, (int(cur_x), int(cur_y)), 6)
+
+    ############################################################################################
+    ########################   MÈTODES DE PERSISTÈNCIA   #######################################
+    ############################################################################################
+
+    def save_table(self, filename="Agent/Qtables/q_table.pkl"):
+        """Delega el guardat al seu propi agent"""
+        self.agent.save_table(filename)
+
+    def load_table(self, filename="Agent/Qtables/q_table.pkl"):
+        """Delega la càrrega al seu propi agent"""
+        self.agent.load_table(filename)

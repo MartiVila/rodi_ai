@@ -48,7 +48,7 @@ class QLearningAgent:
     ########################   MÈTODES DE PERSISTÈNCIA   #######################################
     ############################################################################################
 
-    def save_table(self, filename="q_table.pkl"):
+    def save_table(self, filename="Agent/Qtables/q_table.pkl"):
         """
         Guarda la Q-Table en un fitxer .pkl
         
@@ -61,7 +61,9 @@ class QLearningAgent:
         except Exception as e:
             print(f"[Error] No s'ha pogut guardar la Q-Table: {e}")
 
-    def load_table(self, filename="q_table.pkl"):
+
+
+    def load_table(self, filename="Agent/Qtables/q_table.pkl"):
         """Carrega la Q-Table des d'un fitxer .pkl si existeix"""
         if os.path.exists(filename):
             try:
