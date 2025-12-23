@@ -48,6 +48,7 @@ class Train:
             route_idx = train_id % len(Datas.R1_ROUTES)
         self.route_idx = route_idx
         self.route = Datas.R1_ROUTES[route_idx]
+        
         self.idx = 0  # índice en su ruta
         self.real_time = start_delay
         self.scheduled_time = start_delay

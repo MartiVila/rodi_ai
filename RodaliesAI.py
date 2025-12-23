@@ -62,7 +62,7 @@ STRATEGIES = {
     },
 }
 
-class RodaliesAI:
+class Simulating_Agent:
     """
     CLASSE PRINCIPAL DE VISUALITZACIÓ (PYGAME)
     """
@@ -273,7 +273,7 @@ class RodaliesAI:
 #   CLASSE D'ENTORN MULTI-AGENT (MODE ENTRENAMENT - CONSOLE)
 ############################################################################################
 
-class MultiAgentR1Environment:
+class Training_Agent:
     """
     Entorn lògic (sense gràfics) per entrenar ràpidament.
     """
@@ -434,7 +434,7 @@ def train_console_mode(config):
 
     print(f"Paràmetres: {episodes} episodis | {num_trains} trens | Alpha {alpha_start} | Epsilon {epsilon_start}")
     
-    env = MultiAgentR1Environment(num_trains=num_trains, train_spacing=train_spacing, config=config)
+    train = Training_Agent(num_trains=num_trains, train_spacing=train_spacing, config=config)
     
     import matplotlib
     matplotlib.use("Agg")
@@ -452,25 +452,25 @@ def train_console_mode(config):
         current_epsilon = max(0.01, epsilon_start * epsilon_decay)
         
         # Actualitzar agents
-        for a in env.agents:
+        for a in train.agents:
             a.alpha = current_alpha
             a.epsilon = current_epsilon
 
-        states = env.reset()
+        states = train.reset()
         total_reward = 0
         
-        while not all(t.done for t in env.trains):
+        while not all(t.done for t in train.trains):
             actions = []
-            for i, (agent, state) in enumerate(zip(env.agents, states)):
-                if state is None or env.trains[i].done:
+            for i, (agent, state) in enumerate(zip(train.agents, states)):
+                if state is None or train.trains[i].done:
                     actions.append(1)
                 else:
                     actions.append(agent.action(state))
             
-            next_states, rewards, _ = env.step(actions)
+            next_states, rewards, _ = train.step(actions)
             
-            for i, agent in enumerate(env.agents):
-                if states[i] is not None and not env.trains[i].done:
+            for i, agent in enumerate(train.agents):
+                if states[i] is not None and not train.trains[i].done:
                     agent.update(states[i], actions[i], rewards[i], next_states[i])
             
             states = next_states
@@ -480,7 +480,7 @@ def train_console_mode(config):
         
         if ep % 100 == 0:
             avg_rew = total_reward / num_trains
-            print(f"Episodi {ep} | Reward Total: {total_reward:.1f} (Avg: {avg_rew:.1f}) | Eps: {env.agents[0].epsilon:.3f} | Alpha: {env.agents[0].alpha:.4f}")
+            print(f"Episodi {ep} | Reward Total: {total_reward:.1f} (Avg: {avg_rew:.1f}) | Eps: {train.agents[0].epsilon:.3f} | Alpha: {train.agents[0].alpha:.4f}")
 
     print("\nEntrenament completat.")
     
@@ -489,7 +489,7 @@ def train_console_mode(config):
     
     # 1. Guardar Q-Tables (En guardem una general com q_table.pkl per al visual)
     # Assumim agents cooperatius/similars, guardem la del primer (o fem merge)
-    env.agents[0].save_table("q_table.pkl")
+    train.agents[0].save_table("q_table.pkl")
     print("Taula Q principal guardada a 'q_table.pkl' (per ús visual)")
     
     # 2. Gràfica
@@ -556,5 +556,5 @@ if __name__ == "__main__":
         train_console_mode(config)
     else:
         # Passem la config a l'app visual
-        app = RodaliesAI(config)
+        app = Simulating_Agent(config)
         app.run()
