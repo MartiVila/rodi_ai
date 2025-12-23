@@ -1,8 +1,9 @@
 import pygame
 import math
-import Datas
+from.Datas import Datas
+# [MODIFICACIÓ] Ajusta els imports segons la teva estructura real
 from .EdgeType import EdgeType
-from ..Agent import QlearningAgent
+from Agent import QlearningAgent 
 
 class TrainStatus:
     SENSE_RETARD = "ON TIME"     
@@ -38,7 +39,10 @@ class Train:
         """
 
         self.train_id = train_id
-        self.agent = QlearningAgent()
+        
+        # [MODIFICACIÓ] Cada tren instancia el seu propi agent
+        self.agent = QlearningAgent.QLearningAgent()
+        
         # Seleccionar ruta: si no se especifica, usar basada en ID
         if route_idx is None:
             route_idx = train_id % len(Datas.R1_ROUTES)
@@ -51,6 +55,17 @@ class Train:
         self.waiting_at_station = False  # True si está esperando en estación
         self.wait_time = 0  # tiempo acumulado esperando
 
+        # [NOU] --- VARIABLES VISUALS ---
+        # Afegides per permetre que la funció draw() funcioni sense errors
+        self.node = None          # Node origen gràfic
+        self.target = None        # Node destí gràfic
+        self.current_edge = None  # Via actual
+        self.progress = 0.0       # 0.0 a 1.0 entre estacions
+        self.finished = False     # Sinònim de done per al visual
+        self.delay_global = 0     # Per canviar el color
+        self.collision_detected = False
+        self.last_departure_time = start_delay # Per interpolació visual
+
     def reset(self, start_delay=0):
         self.idx = 0
         self.real_time = start_delay
@@ -58,6 +73,11 @@ class Train:
         self.done = False
         self.waiting_at_station = False
         self.wait_time = 0
+        
+        # [NOU] Reset visual
+        self.finished = False
+        self.progress = 0.0
+        self.last_departure_time = start_delay
 
     def current_segment(self):
         """Retorna el segmento actual (origen, destino) o None si terminó"""
@@ -66,22 +86,32 @@ class Train:
         return (self.route[self.idx], self.route[self.idx + 1])
 
     def draw(self, screen):
-        # (El draw es manté igual, pots fer servir el que ja tenies)
+        # [MODIFICACIÓ] Petita protecció inicial per si el context visual no està llest
         if self.finished: return
+        if not self.node or not self.target: return
+
         color = (0, 200, 0) 
         if abs(self.delay_global) > 5: color = (230, 140, 0) 
         if self.collision_detected: color = (0, 0, 0) 
         
         start_x, start_y = self.node.x, self.node.y
         end_x, end_y = self.target.x, self.target.y
-        off = 5 if self.current_edge.track_id == 0 else -5
+        
+        # [MODIFICACIÓ] Protecció per si current_edge encara és None
+        off = 0
+        if self.current_edge:
+            off = 5 if self.current_edge.track_id == 0 else -5
+            
         dx = end_x - start_x
         dy = end_y - start_y
         dist = (dx**2 + dy**2)**0.5
         if dist == 0: dist = 1
         perp_x = -dy / dist
         perp_y = dx / dist
-        safe_progress = min(1.0, self.progress)
+        
+        # [MODIFICACIÓ] Assegurar que progress està entre 0 i 1
+        safe_progress = min(1.0, max(0.0, self.progress))
+        
         cur_x = start_x + dx * safe_progress + perp_x * off
         cur_y = start_y + dy * safe_progress + perp_y * off
         

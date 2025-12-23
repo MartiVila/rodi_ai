@@ -1,9 +1,10 @@
+
 import random
 import numpy as np
 import pickle  
 import os      
 from collections import defaultdict
-from ..Enviroment import Datas
+from Enviroment.Datas import Datas
 
 class QLearningAgent:
     def __init__(self, alpha=0.05, gamma=0.95, epsilon=0.1):
@@ -55,8 +56,8 @@ class QLearningAgent:
         """
         try:
             with open(filename, "wb") as f:
-                pickle.dump(self.q_table, f)
-            print(f"[Agent] Q-Table guardada correctament a '{filename}'. Entrades: {len(self.q_table)}")
+                pickle.dump(self.q, f)
+            print(f"[Agent] Q-Table guardada correctament a '{filename}'. Entrades: {len(self.q)}")
         except Exception as e:
             print(f"[Error] No s'ha pogut guardar la Q-Table: {e}")
 
@@ -65,8 +66,8 @@ class QLearningAgent:
         if os.path.exists(filename):
             try:
                 with open(filename, "rb") as f:
-                    self.q_table = pickle.load(f)
-                print(f"[Agent] Q-Table carregada! Entrades recuperades: {len(self.q_table)}")
+                    self.q = pickle.load(f)
+                print(f"[Agent] Q-Table carregada! Entrades recuperades: {len(self.q)}")
             except Exception as e:
                 print(f"[Error] Fitxer trobat però corrupta o incompatible: {e}")
         else:
