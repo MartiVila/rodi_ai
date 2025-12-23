@@ -16,7 +16,17 @@ class Node:
         self.neighbors = {} 
 
     def draw(self, screen):
-        color = (0, 100, 200) if not self.highlight else (255, 100, 0)
+        # Color per defecte (Blau Marí)
+        color = (0, 100, 200) 
+        
+        # Si és un apartador (SIDING), el pintem diferent (ex: Lila o Taronja fosc)
+        # Fem servir getattr per seguretat si l'atribut no existís
+        if getattr(self, 'is_siding', False):
+            color = (128, 0, 128) # Lila per indicar capacitat d'apartar
+        # Si està destacat (Highlight), prioritat màxima (Taronja)
+        if self.highlight:
+            color = (255, 100, 0)
+
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius)
         if self.highlight:
             font = pygame.font.SysFont("Arial", 14, bold=True)

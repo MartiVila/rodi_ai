@@ -5,10 +5,6 @@ import math
 import re
 import unicodedata
 import os
-import json
-import pickle
-import sys
-from collections import defaultdict
 from geopy.distance import great_circle
 
 # --- IMPORTS DEL PROJECTE ---
@@ -120,72 +116,117 @@ class Simulating_Agent:
         except: return None
 
     def load_real_data(self):
-        self.r1_connections = [
-            ('MOLINSDEREI', 'SANTFELIUDELLOBREGAT'), ('SANTFELIUDELLOBREGAT', 'SANTJOANDESPI'),
-            ('SANTJOANDESPI', 'CORNELLA'), ('CORNELLA', 'LHOSPITALETDELLOBREGAT'),
-            ('LHOSPITALETDELLOBREGAT', 'BARCELONASANTS'), ('BARCELONASANTS', 'PLACADECATALUNYA'),
-            ('PLACADECATALUNYA', 'ARCDETRIOMF'), ('ARCDETRIOMF', 'BARCELONACLOTARAGO')
-        ]
+        """
+        Carrega dades reals. Ara Datas.py i el CSV coincideixen en noms.
+        """
+        self.r1_connections = []
         wanted_stations = set()
-        for s1, s2 in self.r1_connections:
-            wanted_stations.add(self._normalize_name(s1))
-            wanted_stations.add(self._normalize_name(s2))
+        
+        # 1. Recuperar topologia de Datas.py (que ja té els noms bons)
+        for (u, v) in Datas.R1_TIME.keys():
+            self.r1_connections.append((u, v))
+            # Normalitzem per si hi ha petites diferències (espais, majúscules)
+            wanted_stations.add(self._normalize_name(u))
+            wanted_stations.add(self._normalize_name(v))
 
+        # 2. Llegir coordenades
         csv_path = 'Enviroment/data/estaciones_coordenadas.csv'
         try:
             df = pd.read_csv(csv_path, sep=';', encoding='latin1', skipinitialspace=True)
             df.columns = [c.strip().upper() for c in df.columns]
-        except Exception: return
+        except Exception as e:
+            print(f"Error llegint CSV: {e}")
+            return
 
         lats, lons, temp_st = [], [], []
-        for _, row in df.iterrows():
-            name = row.get('NOMBRE_ESTACION')
-            norm_name = self._normalize_name(name)
-            if norm_name not in wanted_stations: continue 
 
-            lat, lon = self._parse_coord(row.get('LATITUD'), True), self._parse_coord(row.get('LONGITUD'), False)
-            if name and lat and lon:
-                temp_st.append({'id': str(row.get('ID')), 'norm': norm_name, 'orig': name, 'lat': lat, 'lon': lon})
-                lats.append(lat)
-                lons.append(lon)
+        # 3. Crear nodes
+        for _, row in df.iterrows():
+            orig_name = row.get('NOMBRE_ESTACION')
+            norm_name = self._normalize_name(orig_name)
+            
+            # Si el nom normalitzat coincideix, l'afegim
+            if norm_name in wanted_stations:
+                lat = self._parse_coord(row.get('LATITUD'), True)
+                lon = self._parse_coord(row.get('LONGITUD'), False)
+                
+                if lat and lon:
+                    # Fem servir orig_name (del CSV) com a clau, que ara és igual a Datas.py
+                    temp_st.append({'id': str(row.get('ID')), 'name': orig_name, 'lat': lat, 'lon': lon})
+                    lats.append(lat)
+                    lons.append(lon)
 
         if not lats: return
         min_lat, max_lat, min_lon, max_lon = min(lats), max(lats), min(lons), max(lons)
+        
+        # Set d'apartadors (normalitzat per comparar)
+        siding_norm = {self._normalize_name(s) for s in Datas.R1_SIDING_STA}
 
         for st in temp_st:
             x = ((st['lon'] - min_lon) / (max_lon - min_lon)) * (self.width - 100) + 50
             y = self.height - (((st['lat'] - min_lat) / (max_lat - min_lat)) * (self.height - 100) + 50)
             
-            node = Node(x, y, st['id'], name=st['orig'])
+            # Guardem el node
+            node = Node(x, y, st['id'], name=st['name'])
             node.lat, node.lon = st['lat'], st['lon']
-            self.nodes[st['norm']] = node
+            
+            # Comprovem si és apartador
+            if self._normalize_name(st['name']) in siding_norm:
+                node.is_siding = True
+                node.radius = 8
+            
+            self.nodes[st['name']] = node # Clau directa
 
         self.build_R1()
 
+
+
+
     def add_connection(self, s1, s2):
-        n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
-        if n1 in self.nodes and n2 in self.nodes:
-            u, v = self.nodes[n1], self.nodes[n2]
+        # NOTA: NO normalitzem els noms. Usem les claus directes de Datas.py
+        if s1 in self.nodes and s2 in self.nodes:
+            u, v = self.nodes[s1], self.nodes[s2]
+            
+            # Càlcul de distància
             if hasattr(u, 'lat') and u.lat and hasattr(v, 'lat') and v.lat:
                 dist = great_circle((u.lat, u.lon), (v.lat, v.lon)).km
             else:
                 dist = math.sqrt((u.x-v.x)**2 + (u.y-v.y)**2) * 0.05 
             
+            # --- SOLUCIÓ ARESTES DUPLICADES I REGISTRE ---
+            
+            # Creem la Via 0 (Anada)
             e0 = Edge(u, v, EdgeType.NORMAL, 0)
+            self.all_edges.append(e0)
+            u.neighbors[v.id] = [e0]
+            
+            # [NOU] Registrem l'aresta al TrafficManager perquè els trens la trobin
+            TrafficManager.register_segment(s1, s2, e0)
+
+            # Creem la Via 1 (Tornada) - Opcional, però necessària per lògica de rutes inversas
+            # Si vols que visualment es vegi només una línia, pots comentar el self.all_edges.append(e1)
+            # Però lògicament ha d'existir.
             e1 = Edge(u, v, EdgeType.NORMAL, 1)
-            self.all_edges.extend([e0, e1])
-            u.neighbors[v.id] = [e0, e1]
+            self.all_edges.append(e1) # Comenta aquesta línia si NO vols veure la doble via pintada
+            
+            # Registrem també la inversa al Manager
+            TrafficManager.register_segment(s2, s1, e1)
 
     def build_R1(self):
-        for s1, s2 in self.r1_connections: 
-            self.add_connection(s1, s2)
+        # Reiniciem arestes
+        self.all_edges = []
+        
+        # 1. Construir connexions físiques
+        # Iterem directament sobre les claus de Datas.py (que ja estan correctes)
+        for (u, v) in Datas.R1_TIME.keys():
+            self.add_connection(u, v)
+            
+        # 2. Definir itineraris (Noms exactes de Datas.py)
         self.lines = {}
-        self.lines['R1_NORD'] = [
-            'MOLINSDEREI', 'SANTFELIUDELLOBREGAT', 'SANTJOANDESPI', 'CORNELLA', 
-            'LHOSPITALETDELLOBREGAT', 'BARCELONASANTS', 'PLACADECATALUNYA', 
-            'ARCDETRIOMF', 'BARCELONACLOTARAGO'
-        ]
-        self.lines['R1_SUD'] = self.lines['R1_NORD'][::-1]
+        ruta_principal = Datas.R1_ROUTES[0] # La ruta completa
+        
+        self.lines['R1_NORD'] = ruta_principal
+        self.lines['R1_SUD'] = ruta_principal[::-1]
 
     def spawn_random_train(self):
         t_id = len(self.active_trains)

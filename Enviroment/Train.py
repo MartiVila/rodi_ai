@@ -1,14 +1,10 @@
 import pygame
-import math
 import os
-import json
-import pickle
-import sys
-from collections import defaultdict
 from.Datas import Datas
 # [MODIFICACIÓ] Ajusta els imports segons la teva estructura real
 from .EdgeType import EdgeType
 from Agent import QlearningAgent 
+from .TrafficManager import TrafficManager
 
 class TrainStatus:
     SENSE_RETARD = "ON TIME"     
@@ -90,13 +86,9 @@ class Train:
         self.last_departure_time = start_delay
 
     def update(self, dt):
-        """
-        Actualitza l'estat del tren en funció del temps transcorregut (dt).
-        Gestiona el moviment visual (interpolació) i el canvi lògic d'estació.
-        """
         if self.finished: return
 
-        # 1. Obtenir el tram actual (Origen -> Destí)
+        # 1. Obtenir tram
         segment = self.current_segment()
         if not segment:
             self.finished = True
@@ -104,40 +96,43 @@ class Train:
         
         origin_name, target_name = segment
 
-        # 2. Inicialització Visual (Només quan entrem en un nou tram)
-        # Necessitem 'nodes_map' que hem injectat en el pas anterior
+        # 2. Inicialització Visual i Càlcul de Temps
+        # Si canviem de tram o acabem de començar (node és None)
         if self.node is None or self.target is None:
             if hasattr(self, 'nodes_map') and self.nodes_map:
                 self.node = self.nodes_map.get(origin_name)
                 self.target = self.nodes_map.get(target_name)
                 
-                # Determinar durada del trajecte per calcular la velocitat visual
-                # Si no troba el temps al diccionari, assumeix 3 minuts per defecte
-                self.current_travel_duration = Datas.R1_TIME.get(segment, 3.0)
+                # [NOU] Recuperem l'objecte Edge real per saber track_id i propietats
+                self.current_edge = TrafficManager.get_edge(origin_name, target_name)
+
+                # Càlcul de temps (amb penalització per obstacles)
+                base_time = Datas.R1_TIME.get(segment, 3.0)
+                penalty_factor = TrafficManager.get_segment_status(origin_name, target_name)
+                self.current_travel_duration = base_time * penalty_factor
+                
+                if penalty_factor > 1.0:
+                     print(f"⚠️ Tren {self.train_id} alentit per OBSTACLE a {origin_name}->{target_name}")
             else:
-                # Si no tenim mapa, no podem calcular posició visual
                 return
 
-        # 3. Avançar el progrés (Interpolació Lineal)
-        # dt són els minuts simulats que han passat des de l'últim frame
+        # 3. Avançar progrés
         if self.current_travel_duration > 0:
             self.progress += dt / self.current_travel_duration
         else:
-            self.progress = 1.0 # Salt instantani si durada és 0
+            self.progress = 1.0
 
-        # 4. Comprovar arribada a l'estació destí
+        # 4. Comprovar arribada
         if self.progress >= 1.0:
-            # Hem arribat: passem al següent índex de la ruta
             self.idx += 1
             self.progress = 0.0
-            
-            # Actualitzem temps lògics (simplificat per visualització)
             self.scheduled_time += self.current_travel_duration
             self.real_time += self.current_travel_duration 
             
-            # El destí actual passa a ser el nou origen
-            self.node = self.target
-            self.target = None # Forcem a buscar el següent target al pròxim update
+            # Resetegem nodes per forçar la búsqueda del següent tram al proper update
+            self.node = None
+            self.target = None
+            self.current_edge = None 
 
 
     def current_segment(self):
@@ -146,11 +141,13 @@ class Train:
             return None
         return (self.route[self.idx], self.route[self.idx + 1])
 
+    
+
     def draw(self, screen):
-        # [MODIFICACIÓ] Petita protecció inicial per si el context visual no està llest
         if self.finished: return
         if not self.node or not self.target: return
 
+        # Color segons estat
         color = (0, 200, 0) 
         if abs(self.delay_global) > 5: color = (230, 140, 0) 
         if self.collision_detected: color = (0, 0, 0) 
@@ -158,21 +155,24 @@ class Train:
         start_x, start_y = self.node.x, self.node.y
         end_x, end_y = self.target.x, self.target.y
         
-        # [MODIFICACIÓ] Protecció per si current_edge encara és None
+        # [MODIFICACIÓ CLAU] Offset idèntic a Edge.py (3 i -3)
         off = 0
         if self.current_edge:
-            off = 5 if self.current_edge.track_id == 0 else -5
+            # Edge.py fa servir 3 per track 0 i -3 per track 1. Fem el mateix.
+            off = 4 if self.current_edge.track_id == 0 else 3
             
         dx = end_x - start_x
         dy = end_y - start_y
         dist = (dx**2 + dy**2)**0.5
         if dist == 0: dist = 1
+        
+        # Vector perpendicular unitari
         perp_x = -dy / dist
         perp_y = dx / dist
         
-        # [MODIFICACIÓ] Assegurar que progress està entre 0 i 1
         safe_progress = min(1.0, max(0.0, self.progress))
         
+        # Coordenades finals amb l'offset corregit
         cur_x = start_x + dx * safe_progress + perp_x * off
         cur_y = start_y + dy * safe_progress + perp_y * off
         

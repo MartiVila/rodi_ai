@@ -2,16 +2,20 @@
 
 class TrafficManager:
     """
-    Actua com un 'Control Centralitzat' (CTC) o ràdio compartida.
-    Els trens reporten aquí si troben problemes, i consulten abans de decidir.
-    Pattern: Singleton / Static Static State
-
-    També és qui gestiona colisions
+    Centralitza l'estat de la xarxa.
+    Ara també guarda els objectes EDGE físics per consultar-ne l'estat.
     """
-    # Diccionari: {(node_origen, node_desti, via_id): "ALERT"}
     _reported_obstacles = {}
-    # Diccionari: {edge: [(train_id, progress), ...]}
     _train_positions = {}
+    
+    # [NOU] Mapa per accedir ràpidament a l'objecte Edge des de (origen, desti)
+    _physical_segments = {} 
+
+    @staticmethod
+    def register_segment(u_id, v_id, edge_object):
+        """Registra una aresta física al sistema per consulta ràpida"""
+        TrafficManager._physical_segments[(u_id, v_id)] = edge_object
+
 
 
     """
@@ -53,6 +57,32 @@ class TrafficManager:
         key = (u_id, v_id, track_id)
         if key in TrafficManager._reported_obstacles:
             del TrafficManager._reported_obstacles[key]
+
+    @staticmethod
+    def get_edge(u_id, v_id):
+        """Retorna l'objecte Edge físic entre dos nodes"""
+        return TrafficManager._physical_segments.get((u_id, v_id))
+    
+    @staticmethod
+    def get_segment_status(u_id, v_id):
+        """
+        Retorna un factor de penalització de temps basat en l'estat de la via.
+        1.0 = Normal, 3.0 = Obstacle (Més lent), etc.
+        """
+        edge = TrafficManager._physical_segments.get((u_id, v_id))
+        if not edge:
+            return 1.0 # Si no troba la via, assumeix normalitat
+        
+        # Si la via és un OBSTACLE, el temps es multiplica per 3 (va més lent)
+        # Importem EdgeType a dins per evitar dependències circulars o usem valors enters
+        # Suposem: NORMAL=1, OBSTACLE=2, URBAN=3
+        if hasattr(edge, 'edge_type'):
+            if edge.edge_type.name == "OBSTACLE":
+                return 5.0 # Va 5 vegades més lent
+            elif edge.edge_type.name == "URBAN":
+                return 1.5
+        
+        return 1.0
 
     @staticmethod
     def check_alert(u_id, v_id, track_id):
