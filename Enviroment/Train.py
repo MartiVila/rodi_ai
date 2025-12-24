@@ -1,19 +1,18 @@
 import pygame
 import math
+import random
 from Enviroment.Datas import Datas
+from Enviroment.TrafficManager import TrafficManager 
 
 class Train:
     """
     Classe que representa un tren individual.
     """
-
     # --- Constants Físiques ---
-    ACCELERATION = 40.0     # km/h per minut simulat
-    BRAKING = 80.0          # km/h per minut simulat
+    ACCELERATION = 80.0    
+    BRAKING = 150.0         
     MAX_SPEED_TRAIN = 120.0 
-    
-    # NOVETAT: Distància per començar a frenar (300m = 0.3km)
-    BRAKING_DISTANCE_KM = 0.3 
+    BRAKING_DISTANCE_KM = 0.2 
 
     def __init__(self, agent, route_nodes, schedule, start_time_sim, is_training=False):
         self.agent = agent
@@ -28,27 +27,30 @@ class Train:
         self.node = self.route_nodes[0]
         self.target = self.route_nodes[1] if len(route_nodes) > 1 else None
         
+        # Registre d'arribades
+        self.arrival_logs = {} 
+        if self.node:
+            self.arrival_logs[self.node.name] = start_time_sim
+
         self.current_speed = 0.0
         self.distance_covered = 0.0
         self.total_distance = 1.0
-        self.max_speed_edge = 100.0
+        self.max_speed_edge = 90.0
         
         self.sim_time = start_time_sim
         
-        # --- NOVETAT: ESTATS D'ESPERA ---
-        self.is_waiting = False    # Si està parat a l'estació
-        self.wait_timer = 0.0      # Comptador de temps d'espera
-        self.WAIT_TIME_MIN = 1.5   # Temps d'espera per estació (minuts simulats)
+        self.is_waiting = False    
+        self.wait_timer = 0.0      
+        self.WAIT_TIME_MIN = Datas.STOP_STA_TIME   
 
         self.setup_segment()
 
     def setup_segment(self):
-        """Configura el nou tram."""
         if not self.target:
             self.finished = True
             return
 
-        from Enviroment.TrafficManager import TrafficManager
+        # (Import local eliminat, fem servir el global)
         edge = TrafficManager.get_edge(self.node.name, self.target.name)
         
         if edge:
@@ -61,9 +63,7 @@ class Train:
             self.max_speed_edge = 80.0
             
         self.distance_covered = 0.0
-        
-        # [CORRECCIÓ] Eliminem l'impuls inicial de 10km/h perquè surti parat.
-        # self.current_speed es manté com venia (0 si sortim d'estació).
+        self.current_speed = 0.0 
 
     def calculate_delay(self):
         if not self.target: return 0
@@ -72,7 +72,6 @@ class Train:
         return self.sim_time - expected_arrival
 
     # ---------------- FÍSICA ----------------
-
     def accelerate(self, dt_minutes):
         self.current_speed += self.ACCELERATION * dt_minutes
         limit = min(self.MAX_SPEED_TRAIN, self.max_speed_edge)
@@ -88,106 +87,141 @@ class Train:
         distance_step = self.current_speed * (dt_minutes / 60.0)
         self.distance_covered += distance_step
 
-    # ---------------- BUCLE PRINCIPAL ----------------
-
+    # ---------------- UPDATE ----------------
     def update(self, dt_minutes):
         if self.finished: return
-        self.sim_time += dt_minutes
         
-        # [NOVETAT] Gestió de l'espera a l'estació (Boarding)
+        # --- KILL SWITCH CORREGIT ---
+        current_delay_check = self.calculate_delay()
+        if current_delay_check > 60:
+            if self.is_training:
+                # Penalització per mort
+                prev_delay = self.calculate_delay()
+                prev_diff_disc = self.agent.discretize_diff(int(prev_delay))
+                tid = self.current_edge.track_id if self.current_edge else 0
+                state = (self.node.name, self.target.name if self.target else "Fi", prev_diff_disc, 0)
+                
+                self.agent.update(state, 2, -1000, None)
+            
+            self.finished = True
+            # (Import local eliminat)
+            TrafficManager.remove_train(self.id)
+            return
+        # -----------------------------
+
         if self.is_waiting:
+            self.sim_time += dt_minutes
             self.wait_timer -= dt_minutes
             if self.wait_timer <= 0:
                 self.depart_from_station()
-            return # Si estem esperant, no ens movem ni decidim res
+            return 
 
-        from Enviroment.TrafficManager import TrafficManager
-        
-        # 1. Estat i IA
-        delay = self.calculate_delay()
-        discrete_diff = self.agent.discretize_diff(int(delay))
+        # --- PAS 1: OBSERVAR ---
+        prev_delay = self.calculate_delay()
+        prev_diff_disc = self.agent.discretize_diff(int(prev_delay))
         tid = self.current_edge.track_id if self.current_edge else 0
+        
+        # (Import local eliminat)
         is_blocked = TrafficManager.check_alert(self.node.name, self.target.name, tid)
-        state = (self.node.name, self.target.name, discrete_diff, is_blocked)
         
+        state = (self.node.name, self.target.name, prev_diff_disc, is_blocked)
+        
+        # --- PAS 2: ACCIÓ ---
         action_idx = self.agent.action(state)
+        # ==============================================================================
+        # [NOU] KICKSTART: Evitar que l'agent aprengui a quedar-se quiet a la via
+        # ==============================================================================
+        # Si la velocitat és gairebé 0, NO estem esperant a l'estació, i l'acció no és accelerar:
+        if self.current_speed < 1.0 and not self.is_waiting and action_idx != 0:
+            # Forcem l'acceleració amb una probabilitat alta (ex: 50% o 100% al principi)
+            # Això trenca la "passivitat" inicial.
+            if random.random() < 0.5: 
+                action_idx = 0
 
-        # 2. [NOVETAT IMPORTANT] Sobreescriptura per FRENADA A 300m
-        # Calculem distància restant
+        # --- PAS 3: FÍSICA OBLIGATÒRIA (Anti-Trompades) ---
         dist_remaining = self.total_distance - self.distance_covered
-        
         if dist_remaining <= self.BRAKING_DISTANCE_KM:
-            # Lògica d'aproximació:
-            # Si estem a prop, la velocitat màxima ha de baixar proporcionalment a la distància.
-            # Exemple: a 0.3km -> max 60km/h. A 0.1km -> max 20km/h.
-            target_approach_speed = (dist_remaining / self.BRAKING_DISTANCE_KM) * 60.0 + 5.0
-            
+            pct_dist = dist_remaining / self.BRAKING_DISTANCE_KM
+            target_approach_speed = pct_dist * 80.0 + 2.0
             if self.current_speed > target_approach_speed:
-                # Si anem més ràpid del que toca per l'aproximació, FORCEM FRENAR
-                action_idx = 2 # FRENAR
-            elif action_idx == 0: 
-                # Si l'agent vol accelerar però estem molt a prop, ho canviem a MANTENIR
-                action_idx = 1 
+                self.current_speed = target_approach_speed
+                action_idx = 2 
 
-        # 3. Executar Acció Física
-        if action_idx == 0:
-            self.accelerate(dt_minutes)
-        elif action_idx == 1:
-            pass 
-        elif action_idx == 2:
-            self.brake(dt_minutes)
+        # --- PAS 4: EXECUTAR ---
+        if action_idx == 0: self.accelerate(dt_minutes)
+        elif action_idx == 1: pass 
+        elif action_idx == 2: self.brake(dt_minutes)
             
-        # 4. Actualitzar Posició
         self.move(dt_minutes)
+        self.sim_time += dt_minutes
         
         progress_pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
         TrafficManager.update_train_position(self.current_edge, self.id, progress_pct)
 
-        # 5. Arribada
-        if self.distance_covered >= self.total_distance:
-            self.arrive_at_station_logic(state, action_idx, delay)
+        # --- PAS 5: APRENDRE ---
+        
+        # 1. Calculem l'estat següent "per defecte" (el tren segueix viu)
+        #    Això s'ha de fer SEMPRE, estigui arribant o no.
+        new_delay = self.calculate_delay()
+        new_diff_disc = self.agent.discretize_diff(int(new_delay))
+        
+        # [CRÍTIC] Definim new_state aquí perquè existeixi sempre
+        new_state = (self.node.name, self.target.name, new_diff_disc, is_blocked)
+        
+        # 2. Recompensa base (existència/temps)
+        reward = -1.0 
+        if abs(new_delay) > 2: reward -= 0.5
 
-    def arrive_at_station_logic(self, old_state, last_action, delay):
-        """Gestiona l'arribada, recompenses i posa el tren en mode ESPERA"""
+        # 3. Gestió d'arribada a l'estació
+        if self.distance_covered >= self.total_distance:
+            # Recompenses finals d'aquest tram
+            if abs(new_delay) <= 2: 
+                reward += 100 
+            else:
+                reward += 10 
+                reward -= min(50, abs(new_delay) * 2)
+            
+            # Canviem físicament d'estació
+            self.arrive_at_station_logic()
+            
+            # [CRÍTIC] Només si el tren ha acabat TOTALMENT la ruta, l'estat futur és None
+            if self.finished:
+                new_state = None
         
-        # ... (Càlcul de recompenses igual que abans per a l'entrenament) ...
-        # Pots mantenir el codi de rewards original aquí si estàs entrenant
+        # 4. Actualització de la Q-Table
+        if self.is_training:
+            # Ara new_state sempre té valor (o la tupla o None)
+            self.agent.update(state, action_idx, reward, new_state)
+
+    def arrive_at_station_logic(self):
+        self.current_speed = 0.0 
+        self.distance_covered = self.total_distance 
         
-        # En lloc de canviar de tram immediatament, activem l'espera
-        self.current_speed = 0.0 # Assegurem que para completament
-        self.distance_covered = self.total_distance # Visualment al final
-        
-        # Iniciem espera
+        if self.target:
+            self.arrival_logs[self.target.name] = self.sim_time
+
         self.is_waiting = True
         self.wait_timer = self.WAIT_TIME_MIN
-        
-        # Debug
-        # print(f"Tren {self.id} arribat a {self.target.name}. Esperant {self.WAIT_TIME_MIN} min.")
 
     def depart_from_station(self):
-        """Surt de l'estació cap al següent tram després de l'espera"""
-        from Enviroment.TrafficManager import TrafficManager
-        
         self.is_waiting = False
         self.current_node_idx += 1
         self.node = self.target
         
         if self.current_node_idx < len(self.route_nodes) - 1:
             self.target = self.route_nodes[self.current_node_idx + 1]
-            self.setup_segment() # Això posarà distance_covered a 0
+            self.setup_segment()
         else:
             self.finished = True
             self.target = None
+            # (Import local eliminat)
             TrafficManager.remove_train(self.id)
-
-    # ---------------- VISUALITZACIÓ ----------------
 
     def draw(self, screen):
         if self.finished or not self.node or not self.target: return
 
-        # Color segons estat
         if self.is_waiting:
-            color = (255, 255, 0) # Groc quan està parat a l'estació
+            color = (255, 200, 0) 
         else:
             delay = self.calculate_delay()
             if abs(delay) <= 2: color = (0, 255, 0)
@@ -195,15 +229,8 @@ class Train:
             else:               color = (0, 0, 255)
 
         start_x, start_y = self.node.x, self.node.y
-        # Si estem esperant, ens dibuixem exactament al node target (que ara és node actual logicament)
-        # Però com que encara no hem fet el swap de variables fins al depart,
-        # usem la interpolació al 100%
-        
         end_x, end_y = self.target.x, self.target.y
-        
-        off = 0
-        if self.current_edge:
-            off = 4 if self.current_edge.track_id == 0 else -4
+        off = 0 
             
         dx = end_x - start_x
         dy = end_y - start_y
@@ -221,17 +248,12 @@ class Train:
         
         pygame.draw.circle(screen, color, (int(cur_x), int(cur_y)), 6)
 
-        
-    #-------------------DEBUG------------------
-
     def __repr__(self):
-        """Representació text del tren per a prints ràpids"""
         origen = self.node.name if self.node else "?"
         desti = self.target.name if self.target else "?"
         return f"[T-{self.id % 1000}] {origen} -> {desti} (v={self.current_speed:.1f})"
 
     def debug_status(self):
-        """Imprimeix estat físic i d'horari detallat"""
         delay = self.calculate_delay()
         estat_str = "A TEMPS"
         if delay > 2: estat_str = f"RETARD (+{delay:.1f}m)"
@@ -239,24 +261,6 @@ class Train:
         
         print(f"=== DEBUG TREN {self.id} ===")
         print(f"📍 Posició: {self.distance_covered:.2f}/{self.total_distance:.2f} km")
-        print(f"🚄 Velocitat: {self.current_speed:.1f} km/h (Max Via: {self.max_speed_edge})")
+        print(f"🚄 Velocitat: {self.current_speed:.1f} km/h")
         print(f"⏱️  Estat: {estat_str} | SimTime: {self.sim_time:.1f}")
         print("---------------------------")
-
-    def debug_agent_decision(self, state, action, reward=None):
-        """
-        Crida això DINS del mètode update() just després de self.agent.action()
-        per veure què està pensant.
-        """
-        acciones = {0: "ACCELERAR", 1: "MANTENIR", 2: "FRENAR"}
-        nom_accio = acciones.get(action, "UNKNOWN")
-        
-        # Recuperem els Q-values per a aquest estat per veure les opcions
-        q_values = [self.agent.q[(state, a)] for a in range(3)]
-        
-        print(f"🧠 [CERVELL TREN {self.id}]")
-        print(f"   Estat Percebut: {state}")
-        print(f"   Valors Q: {q_values}") # Ex: [0.5, 0.2, -1.0]
-        print(f"   👉 Acció Escollida: {nom_accio} ({action})")
-        if reward is not None:
-             print(f"   🎁 Recompensa rebuda: {reward}")

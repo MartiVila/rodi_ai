@@ -11,18 +11,20 @@ from Enviroment.Datas import Datas
 from Enviroment.Node import Node
 from Enviroment.Edge import Edge
 from Enviroment.EdgeType import EdgeType
+    # Assegura't que tens l'import
+from Enviroment.Datas import Datas
 
 class TrafficManager:
     """
     Centralitza l'estat de la xarxa i la gestió dels trens.
     Ara conté: Nodes, Vies, Trens i Lògica de Spawn.
     """
-    # Estàtics per accés ràpid des dels trens (com tenies abans)
+    # Estàtics per accés ràpid des dels trens
     _reported_obstacles = {}
     _train_positions = {}
     _physical_segments = {} 
     
-    # Configuració de Temps (moguda aquí)
+    # Configuració de Temps
     SPAWN_INTERVAL = 30  
     RESET_INTERVAL = 210
     CHAOS_INTERVAL = 60
@@ -34,60 +36,59 @@ class TrafficManager:
         self.lines = {}
         self.active_trains = []
         
-        # Dimensions per escalar el mapa (necessari per load_real_data)
         self.width = width
         self.height = height
 
-        # Timers interns
         self.sim_time = 0.0
-        self.last_spawn = -999 # Perquè surti un de seguida
+        self.last_spawn = -999 
         self.last_reset = 0
         self.last_chaos = 0
+        self.completed_train_logs = []
 
-        # Inicialitzem l'Agent compartit
         self.brain = QLearningAgent(epsilon=0.2)
         try:
             self.brain.load_table("Agent/Qtables/q_table.pkl")
         except:
             print("No s'ha trobat taula prèvia, es crearà una nova.")
 
-        # Carreguem el mapa automàticament en iniciar
         self._load_network()
 
     # ==========================================
     # LÒGICA PRINCIPAL (UPDATE)
     # ==========================================
     def update(self, dt_minutes):
-        """
-        Mètode principal que RodaliesAI cridarà a cada frame.
-        """
         self.sim_time += dt_minutes
-
-        # 1. Gestió d'Events (Resets i Caos)
         self._handle_mechanics()
 
-        # 2. Spawning (Creació de trens)
         if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
             self.last_spawn = self.sim_time
             self.spawn_line_train('R1_NORD')
 
-        # 3. Actualització de Trens
-        # Fem servir una còpia de la llista per poder esborrar mentre iterem
         for t in self.active_trains[:]:
             t.update(dt_minutes)
             if t.finished:
+                # [NOU] Abans d'esborrar, guardem l'informe
+                self._archive_train_log(t)
+                
                 self.remove_train(t.id)
                 self.active_trains.remove(t)
 
+    def _archive_train_log(self, train):
+        """Guarda les dades del viatge per a l'informe"""
+        log_entry = {
+            'id': train.id,
+            'schedule': train.schedule.copy(),      # {node_id: expected_time}
+            'actuals': train.arrival_logs.copy(),   # {station_name: actual_time}
+            'route_map': {n.id: n.name for n in train.route_nodes} # Per mapejar ID->Nom
+        }
+        self.completed_train_logs.append(log_entry)
+
     def _handle_mechanics(self):
-        """Gestió interna de resets i obstacles"""
-        # Reset diari
         if self.sim_time - self.last_reset > self.RESET_INTERVAL:
             self.last_reset = self.sim_time
             self.reset_network_status()
-            print(f"[TrafficManager] Manteniment de vies realitzat al minut {int(self.sim_time)}")
+            #print(f"[TrafficManager] Manteniment de vies realitzat al minut {int(self.sim_time)}")
 
-        # Caos (Obstacles)
         if self.sim_time - self.last_chaos > self.CHAOS_INTERVAL:
             self.last_chaos = self.sim_time
             normals = [e for e in self.all_edges if e.edge_type == EdgeType.NORMAL]
@@ -95,35 +96,40 @@ class TrafficManager:
                 for e in random.sample(normals, 2):
                     e.edge_type = EdgeType.OBSTACLE
                     e.update_properties()
-                    # Nota: No fem report_issue aquí, deixem que els trens ho descobreixin
 
     def reset_network_status(self):
-        """Neteja obstacles i alertes"""
         for e in self.all_edges: 
             e.edge_type = EdgeType.NORMAL
             e.update_properties()
         TrafficManager._reported_obstacles.clear()
 
     # ==========================================
-    # GESTIÓ DE TRENS
+    # GESTIÓ DE TRENS (CORREGIT)
     # ==========================================
     def spawn_line_train(self, line_name):
-        # Importem Train aquí per evitar l'error circular que tenies
-        from Enviroment.Train import Train
+        from Enviroment.Train import Train # Import local per evitar cicle
 
         if line_name not in self.lines: return
-        station_names = self.lines[line_name]
+        station_names_raw = self.lines[line_name]
         
-        # Convertim noms a objectes Node
-        route_nodes = [self.nodes[n] for n in station_names if n in self.nodes]
+        # [CORRECCIÓ CLAU] Normalitzem el nom abans de buscar al diccionari de nodes
+        route_nodes = []
+        for name_raw in station_names_raw:
+            name_norm = self._normalize_name(name_raw)
+            if name_norm in self.nodes:
+                route_nodes.append(self.nodes[name_norm])
         
+        # Ara route_nodes tindrà totes les estacions correctes, inclosa L'Hospitalet
         if len(route_nodes) > 1:
             schedule = self.calculate_schedule(route_nodes, self.sim_time)
             
-            # Passem el flag is_training al tren nou
             new_train = Train(self.brain, route_nodes, schedule, self.sim_time, 
                               is_training=self.is_training) 
-            self.active_trains.append(new_train)    
+            self.active_trains.append(new_train)
+            if not self.is_training:
+                print(f"[Spawn] Tren creat a {route_nodes[0].name} cap a {route_nodes[-1].name}")
+
+
 
     def calculate_schedule(self, route_nodes, start_time):
         schedule = {}
@@ -136,15 +142,16 @@ class TrafficManager:
             v_name = route_nodes[i+1].name
             edge = self.get_edge(u_name, v_name)
             
-            travel_time = 3.0 # Default
+            travel_time = 3.0 
             if edge: travel_time = edge.expected_minutes
             
-            current_time += travel_time
+            # [CORRECCIÓ] Sumem el temps de viatge + el temps que s'ha estat aturat a l'estació 'i'
+            current_time += travel_time + Datas.STOP_STA_TIME
+            
             schedule[route_nodes[i+1].id] = current_time
         return schedule
-
     # ==========================================
-    # CARREGA DE DADES (Mogut des de RodaliesAI)
+    # CARREGA DE DADES
     # ==========================================
     def _normalize_name(self, name):
         if not isinstance(name, str): return ""
@@ -154,7 +161,6 @@ class TrafficManager:
         return n.upper()
 
     def _parse_coord(self, raw, is_lat=True):
-        # ... (Codi idèntic al que tenies a RodaliesAI) ...
         if raw is None or (isinstance(raw, float) and math.isnan(raw)): return None
         s = str(raw).strip().replace('−', '-')
         digits = re.sub(r"[^0-9-]", "", s)
@@ -170,7 +176,6 @@ class TrafficManager:
     def _load_network(self):
         print("[TrafficManager] Carregant xarxa ferroviària...")
         
-        # 1. Carregar Nodes
         wanted_stations = set()
         for s1, s2 in Datas.R1_CONNECTIONS:
             wanted_stations.add(self._normalize_name(s1))
@@ -201,7 +206,6 @@ class TrafficManager:
         min_lat, max_lat, min_lon, max_lon = min(lats), max(lats), min(lons), max(lons)
 
         for st in temp_st:
-            # Escalat usant self.width/height passats al init
             x = ((st['lon'] - min_lon) / (max_lon - min_lon)) * (self.width - 100) + 50
             y = self.height - (((st['lat'] - min_lat) / (max_lat - min_lat)) * (self.height - 100) + 50)
             
@@ -209,11 +213,9 @@ class TrafficManager:
             node.lat, node.lon = st['lat'], st['lon']
             self.nodes[st['norm']] = node
 
-        # 2. Carregar Vies (Edges)
         for s1, s2 in Datas.R1_CONNECTIONS: 
             self._add_connection(s1, s2)
             
-        # 3. Definir Linies
         self.lines['R1_NORD'] = Datas.R1_STA
         self.lines['R1_SUD'] = Datas.R1_STA[::-1]
         
@@ -223,23 +225,16 @@ class TrafficManager:
         n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
         if n1 in self.nodes and n2 in self.nodes:
             u, v = self.nodes[n1], self.nodes[n2]
-            
-            # Creem via física d'anada (track 0) i tornada (track 1)
             e0 = Edge(u, v, EdgeType.NORMAL, 0)
-            e1 = Edge(v, u, EdgeType.NORMAL, 1) # Note: v -> u for return
-            
+            e1 = Edge(v, u, EdgeType.NORMAL, 1)
             self.all_edges.extend([e0, e1])
-            
-            # Registrem al sistema estàtic per accés ràpid
             TrafficManager.register_segment(u.name, v.name, e0)
             TrafficManager.register_segment(v.name, u.name, e1)
-            
-            # Registrem veïns (opcional si usem rutes fixes, però útil per debug)
             u.neighbors[v.id] = [e0]
             v.neighbors[u.id] = [e1]
 
     # ==========================================
-    # STATIC METHODS (Interfície per als trens)
+    # STATIC METHODS
     # ==========================================
     @staticmethod
     def register_segment(u_name, v_name, edge_object):
@@ -262,12 +257,10 @@ class TrafficManager:
         if not edge: return
         if edge not in TrafficManager._train_positions:
             TrafficManager._train_positions[edge] = []
-        # Eliminem anterior i afegim nou
         TrafficManager._train_positions[edge] = [
             (tid, p) for tid, p in TrafficManager._train_positions[edge] if tid != train_id
         ]
         TrafficManager._train_positions[edge].append((train_id, progress))
-        # Ordenem
         TrafficManager._train_positions[edge].sort(key=lambda x: x[1], reverse=True)
 
     @staticmethod
@@ -277,19 +270,11 @@ class TrafficManager:
                 (tid, p) for tid, p in TrafficManager._train_positions[edge] if tid != train_id
             ]
 
-    # Mètode auxiliar per salvar el cervell en tancar
     def save_brain(self):
         self.brain.save_table("Agent/Qtables/q_table.pkl")
 
-
-
-
     #--------------------------DEBUG-----------------------------------
     def debug_network_snapshot(self):
-        """
-        Imprimeix un resum de tots els trens actius.
-        Útil per cridar cada X segons o amb una tecla.
-        """
         print(f"\n=== SNAPSHOT XARXA (T={self.sim_time:.1f}) ===")
         print(f"Total Trens Actius: {len(self.active_trains)}")
         
@@ -299,7 +284,6 @@ class TrafficManager:
 
         print("--- LLISTA DE TRENS ---")
         for t in self.active_trains:
-            # Usem el mètode calculate_delay del tren
             delay = t.calculate_delay()
             seg = f"{t.node.name[:10]}->{t.target.name[:10]}" if t.target else "Fi Trayecte"
             print(f"🚄 {t.id % 1000:03d} | {seg:25} | v={t.current_speed:5.1f} | Delay: {delay:+5.1f}m")

@@ -32,37 +32,28 @@ class Edge:
     def update_properties(self):
         """
         Actualitza les propietats de l'aresta basant-se en el seu tipus.
-        Defineix:
-        - Velocitat màxima per tipus d'aresta
-        - Temps esperat per recórrer l'aresta
-       
         """
-
-        # Max speeds genèriques (mitjanes de velocitats reals)
+        # 1. VELOCITAT FÍSICA MÀXIMA (La mantenim alta perquè el tren pugui recuperar)
         if self.edge_type == EdgeType.NORMAL:
-            self.max_speed_kmh = 160.0
+            self.max_speed_kmh = 160.0 # El tren està limitat a 120, així que agafarà 120.
         else: # OBSTACLE
             self.max_speed_kmh = 10.0 
-        """
-        elif self.edge_type == EdgeType.URBAN:
-            self.max_speed_kmh = 85.0
-        """
         
+        # 2. VELOCITAT DE REFERÈNCIA PER HORARIS (Aquí posem els 90 km/h)
+        if self.edge_type == EdgeType.NORMAL:
+            reference_speed = 90.0 # <--- AQUESTA és la que mana a l'horari
+        else:
+            reference_speed = 10.0
 
-        # Càlcul del temps esperat per recórrer aquesta aresta
-
-        # Temps mínim a màxima velocitat + 1/4 (25%) de marge extra.
-        # Suposem horaris reals, amb cert marge.
-
-        if self.max_speed_kmh > 0:
-            hours_min = self.real_length_km / self.max_speed_kmh
-            hours_scheduled = hours_min * 1.25  # Afegeix 25% de temps
+        # Càlcul del temps esperat fent servir la REFERÈNCIA, no la màxima
+        if reference_speed > 0:
+            hours_min = self.real_length_km / reference_speed
+            hours_scheduled = hours_min * 1.25  # Marge del 25%
             self.expected_minutes = hours_scheduled * 60
         else:
             self.expected_minutes = 999 
 
-        # Vis_speed es fa servir per debug o moviment simple, però ara el tren
-        # calcularà la seva pròpia velocitat, així que això és secundari.
+        # Vis_speed (només visual)
         if self.expected_minutes > 0:
             self.vis_speed = 1.0 / self.expected_minutes
         else:
