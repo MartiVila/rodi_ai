@@ -89,32 +89,32 @@ class Datas():
     ]
 
     # Temps entre estacions (Claus actualitzades)
-    R1_TIME = {
-        ("L'HOSPITALET DE LLOBREGAT", "BARCELONA-SANTS"): 3,
-        ("BARCELONA-SANTS", "PLACA DE CATALUNYA"): 3,
-        ("PLACA DE CATALUNYA", "ARC DE TRIOMF"): 3,
-        ("ARC DE TRIOMF", "BARCELONA-CLOT-ARAGO"): 3,
-        ("BARCELONA-CLOT-ARAGO", "SANT ADRIA DE BESOS"): 4,
-        ("SANT ADRIA DE BESOS", "BADALONA"): 5,
-        ("BADALONA", "MONTGAT"): 4,
-        ("MONTGAT", "MONTGAT-NORD"): 2,
-        ("MONTGAT-NORD", "EL MASNOU"): 3,
-        ("EL MASNOU", "OCATA"): 3,
-        ("OCATA", "PREMIA DE MAR"): 3,
-        ("PREMIA DE MAR", "VILASSAR DE MAR"): 3,
-        ("VILASSAR DE MAR", "CABRERA DE MAR-VILASSAR DE MAR"): 2,
-        ("CABRERA DE MAR-VILASSAR DE MAR", "MATARO"): 3,
-        ("MATARO", "SANT ANDREU DE LLAVANERES"): 4,
-        ("SANT ANDREU DE LLAVANERES", "ARENYS DE MAR"): 4,
-        ("ARENYS DE MAR", "CANET DE MAR"): 3,
-        ("CANET DE MAR", "SANT POL DE MAR"): 3,
-        ("SANT POL DE MAR", "CALELLA"): 3,
-        ("CALELLA", "PINEDA DE MAR"): 3,
-        ("PINEDA DE MAR", "SANTA SUSANNA"): 3,
-        ("SANTA SUSANNA", "MALGRAT DE MAR"): 3,
-        ("MALGRAT DE MAR", "BLANES"): 3,
-        ("BLANES", "TORDERA"): 5,
-    }
+    R1_CONNECTIONS = [
+        ("L'HOSPITALET DE LLOBREGAT", "BARCELONA-SANTS"),
+        ("BARCELONA-SANTS", "PLACA DE CATALUNYA"),
+        ("PLACA DE CATALUNYA", "ARC DE TRIOMF"),
+        ("ARC DE TRIOMF", "BARCELONA-CLOT-ARAGO"),
+        ("BARCELONA-CLOT-ARAGO", "SANT ADRIA DE BESOS"),
+        ("SANT ADRIA DE BESOS", "BADALONA"),
+        ("BADALONA", "MONTGAT"),
+        ("MONTGAT", "MONTGAT-NORD"),
+        ("MONTGAT-NORD", "EL MASNOU"),
+        ("EL MASNOU", "OCATA"),
+        ("OCATA", "PREMIA DE MAR"),
+        ("PREMIA DE MAR", "VILASSAR DE MAR"),
+        ("VILASSAR DE MAR", "CABRERA DE MAR-VILASSAR DE MAR"),
+        ("CABRERA DE MAR-VILASSAR DE MAR", "MATARO"),
+        ("MATARO", "SANT ANDREU DE LLAVANERES"),
+        ("SANT ANDREU DE LLAVANERES", "ARENYS DE MAR"),
+        ("ARENYS DE MAR", "CANET DE MAR"),
+        ("CANET DE MAR", "SANT POL DE MAR"),
+        ("SANT POL DE MAR", "CALELLA"),
+        ("CALELLA", "PINEDA DE MAR"),
+        ("PINEDA DE MAR", "SANTA SUSANNA"),
+        ("SANTA SUSANNA", "MALGRAT DE MAR"),
+        ("MALGRAT DE MAR", "BLANES"),
+        ("BLANES", "TORDERA"),
+    ]
 
     """
     ############################################################################################
@@ -131,5 +131,5 @@ class Datas():
         0: "ACELERAR",
         1: "MANTENER",
         2: "FRENAR",
-        3: "APARTAR (Apartadero)"
+        3: "CANVI" 
     }

@@ -35,19 +35,19 @@ class Edge:
         Defineix:
         - Velocitat màxima per tipus d'aresta
         - Temps esperat per recórrer l'aresta
-
-        
+       
         """
 
         # Max speeds genèriques (mitjanes de velocitats reals)
         if self.edge_type == EdgeType.NORMAL:
             self.max_speed_kmh = 160.0
-
-        elif self.edge_type == EdgeType.URBAN:
-            self.max_speed_kmh = 85.0
-
         else: # OBSTACLE
             self.max_speed_kmh = 10.0 
+        """
+        elif self.edge_type == EdgeType.URBAN:
+            self.max_speed_kmh = 85.0
+        """
+        
 
         # Càlcul del temps esperat per recórrer aquesta aresta
 
@@ -71,7 +71,8 @@ class Edge:
     def draw(self, screen):
         color = (180, 180, 180) if self.edge_type == EdgeType.NORMAL else (200, 0, 0)
         width = 2
-        off = 3 if self.track_id == 0 else -3
+        off =0
+        #off = 3 if self.track_id == 0 else -3
         dx = self.node2.x - self.node1.x
         dy = self.node2.y - self.node1.y
         dist = math.sqrt(dx*dx + dy*dy)
