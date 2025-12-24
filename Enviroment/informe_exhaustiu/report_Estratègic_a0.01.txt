@@ -1,0 +1,34 @@
+=== INFORME EXHAUSTIU: Estratègic (a=0.01) ===
+Dies simulats: 1000
+Retard Final (Mitjana últims 1000 dies): 26.3858 min
+Estabilitat (Std Dev): 0.4851 min
+Epsilon Final: ~0.9999^1000
+
+--- MOSTRA DE L'ÚLTIM TREN (Dia 1000) ---
+ESTACIÓ                        | PREVIST  | REAL     | DIF
+-----------------------------------------------------------------
+L'HOSPITALET DE LLOBREGAT      | 1303     | 1303     | +0.0m
+BARCELONA-SANTS                | 1305     | 1308     | +2.2m
+PLACA DE CATALUNYA             | 1307     | 1311     | +3.5m
+ARC DE TRIOMF                  | 1308     | 1313     | +4.5m
+BARCELONA-CLOT-ARAGO           | 1310     | 1316     | +5.5m
+SANT ADRIA DE BESOS            | 1313     | 1320     | +6.8m
+BADALONA                       | 1315     | 1326     | +10.2m
+MONTGAT                        | 1318     | 1333     | +14.9m
+MONTGAT-NORD                   | 1319     | 1335     | +15.9m
+EL MASNOU                      | 1320     | 1340     | +19.3m
+OCATA                          | 1321     | 1342     | +20.7m
+PREMIA DE MAR                  | 1323     | 1345     | +21.6m
+VILASSAR DE MAR                | 1325     | 1348     | +22.1m
+CABRERA DE MAR-VILASSAR DE MAR | 1326     | 1350     | +23.2m
+MATARO                         | 1330     | 1356     | +25.3m
+SANT ANDREU DE LLAVANERES      | 1334     | 1360     | +25.6m
+ARENYS DE MAR                  | 1338     | 1367     | +28.8m
+CANET DE MAR                   | 1340     | 1376     | +35.8m
+SANT POL DE MAR                | 1343     | 1381     | +37.9m
+CALELLA                        | 1345     | 1387     | +41.1m
+PINEDA DE MAR                  | 1347     | 1390     | +42.4m
+SANTA SUSANNA                  | 1349     | 1393     | +43.8m
+MALGRAT DE MAR                 | 1350     | 1396     | +45.5m
+BLANES                         | 1354     | 1404     | +49.2m
+TORDERA                        | 1359     | 1414     | +54.6m

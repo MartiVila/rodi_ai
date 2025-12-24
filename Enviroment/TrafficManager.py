@@ -44,6 +44,9 @@ class TrafficManager:
         self.last_reset = 0
         self.last_chaos = 0
         self.completed_train_logs = []
+        
+        # Variable per controlar quina línia es genera (per defecte la completa)
+        self.current_spawn_line = 'R1_NORD' 
 
         self.brain = QLearningAgent(epsilon=0.2)
         try:

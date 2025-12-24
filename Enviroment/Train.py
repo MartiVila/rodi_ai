@@ -7,12 +7,13 @@ from Enviroment.TrafficManager import TrafficManager
 class Train:
     """
     Classe que representa un tren individual.
+    Refactoritzada per utilitzar Estats Generalitzats (Distància/Velocitat) en lloc de Noms d'Estació.
     """
     # --- Constants Físiques ---
     ACCELERATION = 80.0    
     BRAKING = 150.0         
     MAX_SPEED_TRAIN = 120.0 
-    BRAKING_DISTANCE_KM = 0.2 
+    BRAKING_DISTANCE_KM = 0.1
 
     def __init__(self, agent, route_nodes, schedule, start_time_sim, is_training=False):
         self.agent = agent
@@ -50,7 +51,6 @@ class Train:
             self.finished = True
             return
 
-        # (Import local eliminat, fem servir el global)
         edge = TrafficManager.get_edge(self.node.name, self.target.name)
         
         if edge:
@@ -71,6 +71,39 @@ class Train:
         if expected_arrival is None: return 0
         return self.sim_time - expected_arrival
 
+    # ---------------- ESTAT GENERALITZAT (EL SECRET DEL CANVI) ----------------
+    def _get_general_state(self):
+        """
+        Converteix la situació actual en un estat genèric.
+        L'agent ja no sap a 'Sants' o 'Mataró', només sap:
+        - Quanta % de distància li queda.
+        - A quina velocitat va.
+        - Si va tard o d'hora.
+        """
+        # 1. Distància relativa (0-10) -> Discretitzem en 10 trams
+        if self.total_distance > 0:
+            pct = self.distance_covered / self.total_distance
+            dist_state = int(pct * 10) 
+            if dist_state > 9: dist_state = 9 # El tram 9 és just abans d'arribar
+        else:
+            dist_state = 9
+            
+        # 2. Velocitat relativa (0-12) -> Bins de 10 km/h aprox
+        # 120 km/h màxim -> 12 estats
+        speed_state = int(self.current_speed / 10.0)
+        if speed_state > 12: speed_state = 12
+        
+        # 3. Retard (Discretitzat per l'agent: -2 a +2)
+        delay = self.calculate_delay()
+        diff_disc = self.agent.discretize_diff(int(delay))
+        
+        # 4. Bloqueig (Alertes a la via)
+        tid = self.current_edge.track_id if self.current_edge else 0
+        is_blocked = TrafficManager.check_alert(self.node.name, self.target.name, tid)
+        
+        # ESTAT FINAL: (Distància, Velocitat, Retard, Bloqueig)
+        return (dist_state, speed_state, diff_disc, is_blocked)
+
     # ---------------- FÍSICA ----------------
     def accelerate(self, dt_minutes):
         self.current_speed += self.ACCELERATION * dt_minutes
@@ -87,24 +120,18 @@ class Train:
         distance_step = self.current_speed * (dt_minutes / 60.0)
         self.distance_covered += distance_step
 
-    # ---------------- UPDATE ----------------
+    # ---------------- UPDATE PRINCIPAL ----------------
     def update(self, dt_minutes):
         if self.finished: return
         
-        # --- KILL SWITCH CORREGIT ---
+        # --- KILL SWITCH (Penalització per retard excessiu) ---
         current_delay_check = self.calculate_delay()
         if current_delay_check > 60:
             if self.is_training:
-                # Penalització per mort
-                prev_delay = self.calculate_delay()
-                prev_diff_disc = self.agent.discretize_diff(int(prev_delay))
-                tid = self.current_edge.track_id if self.current_edge else 0
-                state = (self.node.name, self.target.name if self.target else "Fi", prev_diff_disc, 0)
-                
+                state = self._get_general_state() # Estat just abans de morir
                 self.agent.update(state, 2, -1000, None)
             
             self.finished = True
-            # (Import local eliminat)
             TrafficManager.remove_train(self.id)
             return
         # -----------------------------
@@ -116,25 +143,14 @@ class Train:
                 self.depart_from_station()
             return 
 
-        # --- PAS 1: OBSERVAR ---
-        prev_delay = self.calculate_delay()
-        prev_diff_disc = self.agent.discretize_diff(int(prev_delay))
-        tid = self.current_edge.track_id if self.current_edge else 0
-        
-        # (Import local eliminat)
-        is_blocked = TrafficManager.check_alert(self.node.name, self.target.name, tid)
-        
-        state = (self.node.name, self.target.name, prev_diff_disc, is_blocked)
+        # --- PAS 1: OBSERVAR (Nou mètode generalitzat) ---
+        state = self._get_general_state()
         
         # --- PAS 2: ACCIÓ ---
         action_idx = self.agent.action(state)
-        # ==============================================================================
-        # [NOU] KICKSTART: Evitar que l'agent aprengui a quedar-se quiet a la via
-        # ==============================================================================
-        # Si la velocitat és gairebé 0, NO estem esperant a l'estació, i l'acció no és accelerar:
+
+        # [KICKSTART] Si estem parats a la via (no estació), forcem arrencada
         if self.current_speed < 1.0 and not self.is_waiting and action_idx != 0:
-            # Forcem l'acceleració amb una probabilitat alta (ex: 50% o 100% al principi)
-            # Això trenca la "passivitat" inicial.
             if random.random() < 0.5: 
                 action_idx = 0
 
@@ -142,10 +158,12 @@ class Train:
         dist_remaining = self.total_distance - self.distance_covered
         if dist_remaining <= self.BRAKING_DISTANCE_KM:
             pct_dist = dist_remaining / self.BRAKING_DISTANCE_KM
-            target_approach_speed = pct_dist * 80.0 + 2.0
+            # Velocitat d'aproximació segura
+            target_approach_speed = pct_dist * 80.0 + 15.0 
+            
             if self.current_speed > target_approach_speed:
                 self.current_speed = target_approach_speed
-                action_idx = 2 
+                action_idx = 2 # Forcem acció 'Frenar' per a l'aprenentatge
 
         # --- PAS 4: EXECUTAR ---
         if action_idx == 0: self.accelerate(dt_minutes)
@@ -160,37 +178,34 @@ class Train:
 
         # --- PAS 5: APRENDRE ---
         
-        # 1. Calculem l'estat següent "per defecte" (el tren segueix viu)
-        #    Això s'ha de fer SEMPRE, estigui arribant o no.
+        # Calculem recompensa
         new_delay = self.calculate_delay()
-        new_diff_disc = self.agent.discretize_diff(int(new_delay))
-        
-        # [CRÍTIC] Definim new_state aquí perquè existeixi sempre
-        new_state = (self.node.name, self.target.name, new_diff_disc, is_blocked)
-        
-        # 2. Recompensa base (existència/temps)
-        reward = -1.0 
+        reward = -1.0 # Cost per minut (perquè vulgui arribar ràpid)
         if abs(new_delay) > 2: reward -= 0.5
 
-        # 3. Gestió d'arribada a l'estació
+        # Gestió d'arribada
+        arrived = False
         if self.distance_covered >= self.total_distance:
-            # Recompenses finals d'aquest tram
+            arrived = True
+            # Recompenses finals del tram
             if abs(new_delay) <= 2: 
                 reward += 100 
             else:
                 reward += 10 
                 reward -= min(50, abs(new_delay) * 2)
             
-            # Canviem físicament d'estació
             self.arrive_at_station_logic()
-            
-            # [CRÍTIC] Només si el tren ha acabat TOTALMENT la ruta, l'estat futur és None
+        
+        if self.is_training:
+            # Si hem acabat el trajecte complet (finished), l'estat futur és None
             if self.finished:
                 new_state = None
-        
-        # 4. Actualització de la Q-Table
-        if self.is_training:
-            # Ara new_state sempre té valor (o la tupla o None)
+            else:
+                # Si només hem arribat a una estació intermèdia, 
+                # l'estat futur és "inici del següent tram" (dist=0, speed=0)
+                # O si estem en marxa, recalculem l'estat general.
+                new_state = self._get_general_state()
+
             self.agent.update(state, action_idx, reward, new_state)
 
     def arrive_at_station_logic(self):
@@ -214,7 +229,6 @@ class Train:
         else:
             self.finished = True
             self.target = None
-            # (Import local eliminat)
             TrafficManager.remove_train(self.id)
 
     def draw(self, screen):
