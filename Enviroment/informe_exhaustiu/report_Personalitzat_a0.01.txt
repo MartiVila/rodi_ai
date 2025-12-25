@@ -1,7 +1,7 @@
 === INFORME EXHAUSTIU: Personalitzat (a=0.01) ===
 Dies simulats: 10000
-Retard Final (Mitjana últims 1000 dies): 1.6395 min
-Estabilitat (Std Dev): 0.0734 min
+Retard Final (Mitjana últims 1000 dies): 1.6469 min
+Estabilitat (Std Dev): 0.1062 min
 Epsilon Decay Rate: 0.2
 
 --- MOSTRA DE L'ÚLTIM TREN (Dia 10000) ---

@@ -237,6 +237,9 @@ class Train:
         
         if abs(new_delay) > 2: reward -= 0.5 # Penalització extra per anar fora d'horari
 
+        if action_idx != 1:
+            reward -= 0.2  #Penalitzaicó per no manetnri velocitat
+
         # He arribat a l'estació?
         if self.distance_covered >= self.total_distance:
             # Gran recompensa/càstig final
