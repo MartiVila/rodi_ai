@@ -1,6 +1,7 @@
 import pygame
 from Enviroment.TrafficManager import TrafficManager
 
+
 class RodaliesAI:
     # Configuració de la simulació
     TIME_SCALE = 10.0      

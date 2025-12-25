@@ -69,7 +69,29 @@ class Train:
         if not self.target: return 0
         expected_arrival = self.schedule.get(self.target.id)
         if expected_arrival is None: return 0
-        return self.sim_time - expected_arrival
+        
+
+        # No mirem si som allà "ara", sinó quan trigarem a arribar-hi.
+        
+        remaining_dist_km = self.total_distance - self.distance_covered
+        
+        # Estimem la velocitat: Si estem parats, assumim la velocitat de la via (ex: 90%)
+        # Si ja ens movem ràpid, usem la velocitat actual.
+        if self.current_speed > 10:
+            # Si anem lents però lluny, assumim que accelerarem fins a la velocitat de la via
+            projected_speed = max(self.current_speed, self.max_speed_edge * 0.8)
+        else:
+            projected_speed = self.max_speed_edge * 0.9 # Suposició optimista per arrencar
+            
+        if projected_speed <= 0: projected_speed = 1.0 # Evitar divisió per zero
+
+        # Temps estimat en minuts per recórrer el que falta
+        time_needed_min = (remaining_dist_km / projected_speed) * 60
+        
+        projected_arrival_time = self.sim_time + time_needed_min
+        
+        # El retard és la diferència entre quan PREVEIEM arribar i quan l'horari diu
+        return projected_arrival_time - expected_arrival
 
     # ---------------- ESTAT GENERALITZAT (EL SECRET DEL CANVI) ----------------
     def _get_general_state(self):
@@ -80,30 +102,43 @@ class Train:
         - A quina velocitat va.
         - Si va tard o d'hora.
         """
-        # 1. Distància relativa (0-10) -> Discretitzem en 10 trams
+        """
+        Estat: (Segment_ID, Distància_50, Velocitat_10, Retard)
+        """
+        
+        # 1. IDENTIFICADOR DEL SEGMENT (El canvi que demanes)
+        # Creem un string únic per a aquest parell d'estacions
+        if self.node and self.target:
+            # Ex: "BARCELONA-SANTS->PLACA DE CATALUNYA"
+            segment_id = self.agent.get_segment_id(self.node.name, self.target.name) 
+            # Nota: Si no vols crear un mètode al agent, pots fer directament:
+            # segment_id = f"{self.node.name}->{self.target.name}"
+        else:
+            segment_id = "FI_TRAJECTE"
+
+        # 2. DISTÀNCIA (Mantenim els 50 nodes per precisió)
         if self.total_distance > 0:
             pct = self.distance_covered / self.total_distance
-            dist_state = int(pct * 10) 
-            if dist_state > 9: dist_state = 9 # El tram 9 és just abans d'arribar
+            dist_state = int(pct * 50)  # 50 trams
+            if dist_state > 49: dist_state = 49
         else:
-            dist_state = 9
+            dist_state = 49
             
-        # 2. Velocitat relativa (0-12) -> Bins de 10 km/h aprox
-        # 120 km/h màxim -> 12 estats
+        # 3. VELOCITAT (Necessària per la física)
         speed_state = int(self.current_speed / 10.0)
         if speed_state > 12: speed_state = 12
         
-        # 3. Retard (Discretitzat per l'agent: -2 a +2)
+        # 4. RETARD (El que volies)
         delay = self.calculate_delay()
         diff_disc = self.agent.discretize_diff(int(delay))
         
-        # 4. Bloqueig (Alertes a la via)
+        # Opcional: Bloqueig (si vols mantenir-ho)
         tid = self.current_edge.track_id if self.current_edge else 0
         is_blocked = TrafficManager.check_alert(self.node.name, self.target.name, tid)
         
-        # ESTAT FINAL: (Distància, Velocitat, Retard, Bloqueig)
-        return (dist_state, speed_state, diff_disc, is_blocked)
-
+        # ESTAT FINAL COMBINAT
+        return (segment_id, dist_state, speed_state, diff_disc, is_blocked)
+    
     # ---------------- FÍSICA ----------------
     def accelerate(self, dt_minutes):
         self.current_speed += self.ACCELERATION * dt_minutes
@@ -122,20 +157,31 @@ class Train:
 
     # ---------------- UPDATE PRINCIPAL ----------------
     def update(self, dt_minutes):
+        reward = 0
         if self.finished: return
         
-        # --- KILL SWITCH (Penalització per retard excessiu) ---
+        # --- SISTEMA ANTIBLOQUEIG (NO MATAR, FORÇAR) ---
         current_delay_check = self.calculate_delay()
+        
+        # Variable per saber si hem d'intervenir manualment
+        force_action_idx = None 
+
         if current_delay_check > 60:
+            # 1. Castiguem l'agent: Li diem "Això està fatal"
             if self.is_training:
-                state = self._get_general_state() # Estat just abans de morir
-                self.agent.update(state, 2, -1000, None)
+                state = self._get_general_state()
+                # Li passem acció 2 (Frenar/No fer res) com a causa del càstig, 
+                # per ensenyar-li que quedar-se parat amb tant retard és terrible.
+                self.agent.update(state, 2, -100, None) 
             
-            self.finished = True
-            TrafficManager.remove_train(self.id)
-            return
+            # 2. DECISIÓ DIVINA: Si no estem en una estació, t'obligo a córrer.
+            if not self.is_waiting and self.is_training:
+                force_action_idx = 0 # 0 = ACCELERAR (Override)
+            
+            # NOTA: NO hi ha 'return'. Deixem que el codi segueixi fluint.
         # -----------------------------
 
+        # Gestió d'espera a l'estació (ARA SÍ QUE S'EXECUTARÀ SEMPRE)
         if self.is_waiting:
             self.sim_time += dt_minutes
             self.wait_timer -= dt_minutes
@@ -143,27 +189,33 @@ class Train:
                 self.depart_from_station()
             return 
 
-        # --- PAS 1: OBSERVAR (Nou mètode generalitzat) ---
+        # --- PAS 1: OBSERVAR ---
         state = self._get_general_state()
         
         # --- PAS 2: ACCIÓ ---
-        action_idx = self.agent.action(state)
+        # Si tenim una ordre forçada (pel retard), la usem. Si no, deixem decidir a l'agent.
+        if force_action_idx is not None and self.is_training:
+            action_idx = force_action_idx
+        else:
+            action_idx = self.agent.action(state)
 
-        # [KICKSTART] Si estem parats a la via (no estació), forcem arrencada
-        if self.current_speed < 1.0 and not self.is_waiting and action_idx != 0:
+        # [KICKSTART] Si estem parats a la via (v < 1) i l'agent no accelera, 
+        # li donem una petita empenta aleatòria perquè no es quedi buclejat.
+        if self.current_speed < 1.0 and action_idx != 0:
             if random.random() < 0.5: 
                 action_idx = 0
+                
 
-        # --- PAS 3: FÍSICA OBLIGATÒRIA (Anti-Trompades) ---
+        # --- PAS 3: FÍSICA OBLIGATÒRIA (SEGURETAT) ---
+        # Si s'acaba la via, frenem sí o sí, digui el que digui l'agent o l'override.
         dist_remaining = self.total_distance - self.distance_covered
         if dist_remaining <= self.BRAKING_DISTANCE_KM:
             pct_dist = dist_remaining / self.BRAKING_DISTANCE_KM
-            # Velocitat d'aproximació segura
             target_approach_speed = pct_dist * 80.0 + 15.0 
             
             if self.current_speed > target_approach_speed:
                 self.current_speed = target_approach_speed
-                action_idx = 2 # Forcem acció 'Frenar' per a l'aprenentatge
+                action_idx = 2 # Forcem acció 'Frenar' per a l'aprenentatge visual
 
         # --- PAS 4: EXECUTAR ---
         if action_idx == 0: self.accelerate(dt_minutes)
@@ -177,33 +229,23 @@ class Train:
         TrafficManager.update_train_position(self.current_edge, self.id, progress_pct)
 
         # --- PAS 5: APRENDRE ---
-        
-        # Calculem recompensa
         new_delay = self.calculate_delay()
-        reward = -1.0 # Cost per minut (perquè vulgui arribar ràpid)
+        reward += -1.0 
         if abs(new_delay) > 2: reward -= 0.5
 
-        # Gestió d'arribada
-        arrived = False
         if self.distance_covered >= self.total_distance:
-            arrived = True
-            # Recompenses finals del tram
+            # Recompenses d'arribada (igual que abans)
             if abs(new_delay) <= 2: 
                 reward += 100 
             else:
                 reward += 10 
                 reward -= min(50, abs(new_delay) * 2)
-            
             self.arrive_at_station_logic()
         
         if self.is_training:
-            # Si hem acabat el trajecte complet (finished), l'estat futur és None
             if self.finished:
                 new_state = None
             else:
-                # Si només hem arribat a una estació intermèdia, 
-                # l'estat futur és "inici del següent tram" (dist=0, speed=0)
-                # O si estem en marxa, recalculem l'estat general.
                 new_state = self._get_general_state()
 
             self.agent.update(state, action_idx, reward, new_state)

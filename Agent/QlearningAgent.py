@@ -33,6 +33,13 @@ class QLearningAgent:
         else:  # diff > 1
             return 2   # Molt retardat
 
+    def get_segment_id(self, origin, destination):
+        """
+        Genera un ID únic per al tram (per a la Q-Table).
+        Exemple: "BARCELONA-SANTS->PLACA DE CATALUNYA"
+        """
+        return f"{origin}->{destination}"
+    
     def action(self, state):
         """state = (origen, destí, diff_discretized, is_blocked)"""
         # Exploració (Epsilon-greedy)

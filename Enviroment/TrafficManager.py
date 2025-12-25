@@ -14,6 +14,9 @@ from Enviroment.EdgeType import EdgeType
     # Assegura't que tens l'import
 from Enviroment.Datas import Datas
 
+HYPERPARAMS_GRID = [0.3, 0.99, 0.99]
+
+
 class TrafficManager:
     """
     Centralitza l'estat de la xarxa i la gestió dels trens.
@@ -48,7 +51,7 @@ class TrafficManager:
         # Variable per controlar quina línia es genera (per defecte la completa)
         self.current_spawn_line = 'R1_NORD' 
 
-        self.brain = QLearningAgent(epsilon=0.2)
+        self.brain = QLearningAgent(alpha=HYPERPARAMS_GRID[0], gamma=HYPERPARAMS_GRID[1], epsilon=HYPERPARAMS_GRID[2])
         try:
             self.brain.load_table("Agent/Qtables/q_table.pkl")
         except:
@@ -92,13 +95,15 @@ class TrafficManager:
             self.reset_network_status()
             #print(f"[TrafficManager] Manteniment de vies realitzat al minut {int(self.sim_time)}")
 
-        if self.sim_time - self.last_chaos > self.CHAOS_INTERVAL:
+        
+        if not self.is_training and self.sim_time - self.last_chaos > self.CHAOS_INTERVAL:
             self.last_chaos = self.sim_time
             normals = [e for e in self.all_edges if e.edge_type == EdgeType.NORMAL]
             if len(normals) > 2:
                 for e in random.sample(normals, 2):
                     e.edge_type = EdgeType.OBSTACLE
                     e.update_properties()
+        
 
     def reset_network_status(self):
         for e in self.all_edges: 
@@ -115,7 +120,7 @@ class TrafficManager:
         if line_name not in self.lines: return
         station_names_raw = self.lines[line_name]
         
-        # [CORRECCIÓ CLAU] Normalitzem el nom abans de buscar al diccionari de nodes
+        # Normalitzem el nom abans de buscar al diccionari de nodes
         route_nodes = []
         for name_raw in station_names_raw:
             name_norm = self._normalize_name(name_raw)
