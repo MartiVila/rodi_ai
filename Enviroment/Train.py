@@ -198,13 +198,14 @@ class Train:
         
         # [Override] Mecanisme de seguretat per evitar bucles infinits si l'AI es torna boja
         # Si portem més de 60 minuts de retard, forcem acceleració (excepte si estem frenant per arribar)
+        # Nomes es fa al entrenament per audar al ensenyament de la IA
         if current_delay > 60 and self.is_training:
              # Castiguem l'agent per haver arribat a aquesta situació
             self.agent.update(state, 2, -100, None)
             action_idx = 0 # Forçar Accelerar
 
         # [Override] Kickstart: Si està parat enmig del no-res, empenta aleatòria
-        if self.current_speed < 1.0 and action_idx != 0:
+        if self.current_speed < 1.0 and action_idx != 0 and self.is_training:
             if random.random() < 0.5: action_idx = 0
 
         # [Override] Física de Seguretat: Frenada automàtica final de trajecte
