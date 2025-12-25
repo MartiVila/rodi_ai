@@ -7,7 +7,7 @@ class Datas:
     """
 
     # Temps (minuts) que un tren ha d'esperar obligatòriament a cada estació
-    STOP_STA_TIME = 0.5  # Ex: 30 segons
+    STOP_STA_TIME = 0  # Ex: 30 segons
 
     # Llista ordenada d'estacions (R1 Nord)
     R1_STA = [

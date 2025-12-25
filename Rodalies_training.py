@@ -37,6 +37,10 @@ class RodaliesTraining:
         {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'}
     ]
 
+    HYPERPARAMS_PERS_GRID = [
+        {'alpha': 0.01,  'gamma': 0.95, 'epsilon_decay': 0.9,  'label': 'Personalitzat (a=0.01)'}
+    ]
+
     def __init__(self):
         """Inicialitza l'entorn de treball i crea els directoris necessaris."""
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)
@@ -275,6 +279,57 @@ class RodaliesTraining:
             smooth_data = data_series.rolling(window=200).mean()
             plt.plot(smooth_data, label=f"{params['label']}", linewidth=2)
 
+        history, logs, _ = self.run_experiment(self.HYPERPARAMS_PERS_GRID[0])
+        results[self.HYPERPARAMS_PERS_GRID[0]['label']] = history
+
+        self._save_report(logs, self.HYPERPARAMS_PERS_GRID[0], history)
+
+        data_series = pd.Series(history)
+        smooth_data = data_series.rolling(window=200).mean()
+        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_PERS_GRID[0]['label']}", linewidth=2)
+
+        # Dibuixem línies verticals per marcar el canvi de nivells del Curriculum
+        # Necessitem saber quants nivells hi ha (assumim 6 segons _setup_curriculum)
+        levels_count = 6 
+        days_per_level = self.TOTAL_DAYS / levels_count
+        for i in range(1, levels_count):
+            plt.axvline(x=i*days_per_level, color='k', linestyle='--', alpha=0.3, 
+                       label='Nivell Up' if i==1 else "")
+
+        # Format del gràfic
+        plt.xlabel('Dies (Episodis)')
+        plt.ylabel('Retard Promig (Mitjana Mòbil 200 dies)')
+        plt.title(f'Comparativa Q-Learning amb Curriculum ({self.TOTAL_DAYS} dies)')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Guardar gràfic
+        plot_path = f"{self.PLOTS_DIR}/curriculum_comparison.png"
+        plt.savefig(plot_path, dpi=300)
+        print(f"\n[GRÀFIC FINAL] Guardat a: {plot_path}")
+        print("\n=== EXPERIMENT FINALITZAT ===")
+
+    def personal_training(self):
+        """
+        Mètode principal. Itera sobre totes les configuracions d'hiperparàmetres,
+        executa els experiments i genera el gràfic comparatiu final.
+        """
+        print(f"=== INICIANT GRID SEARCH EXHAUSTIU ({self.TOTAL_DAYS} dies) ===")
+        results = {}
+        
+        # Configuració del gràfic
+        plt.figure(figsize=(15, 10))
+        
+        # Configuracio personalitzada
+        history, logs, _ = self.run_experiment(self.HYPERPARAMS_PERS_GRID[0])
+        results[self.HYPERPARAMS_PERS_GRID[0]['label']] = history
+
+        self._save_report(logs, self.HYPERPARAMS_PERS_GRID[0], history)
+
+        data_series = pd.Series(history)
+        smooth_data = data_series.rolling(window=200).mean()
+        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_PERS_GRID[0]['label']}", linewidth=2)
+
         # Dibuixem línies verticals per marcar el canvi de nivells del Curriculum
         # Necessitem saber quants nivells hi ha (assumim 6 segons _setup_curriculum)
         levels_count = 6 
@@ -298,4 +353,7 @@ class RodaliesTraining:
 
 if __name__ == "__main__":
     trainer = RodaliesTraining()
-    trainer.run_grid_search()
+    #trainer.run_grid_search()
+
+    # Entrenament personalitzat
+    trainer.personal_training()

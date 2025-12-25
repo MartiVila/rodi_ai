@@ -46,13 +46,13 @@ class Edge:
             self.max_speed_kmh = 10.0 # Avaria greu
         
         # 2. VELOCITAT COMERCIAL (Per calcular horaris teòrics)
-        # Els horaris es calculen sobre 90 km/h, donant marge per recuperar retards.
+        # Augmentem el marge perquè el calendari sigui més realista amb l'accel./frenada.
         reference_speed = 90.0 if self.edge_type == EdgeType.NORMAL else 10.0
 
         if reference_speed > 0:
             hours_min = self.real_length_km / reference_speed
-            # Afegim un buffer del 25% extra al temps previst (Padding)
-            hours_scheduled = hours_min * 1.25  
+            # Padding més ampli (60%) per absorbir arrencades, frenades i parada obligada.
+            hours_scheduled = hours_min * 1.60
             self.expected_minutes = hours_scheduled * 60
         else:
             self.expected_minutes = 999.0
