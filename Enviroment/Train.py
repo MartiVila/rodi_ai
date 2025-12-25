@@ -134,7 +134,17 @@ class Train:
             if dist_state > 49: dist_state = 49
         else:
             dist_state = 49
-            
+        
+        ##NOVA IMPLMENTACI'O
+        dist_leader = TrafficManager.get_distance_to_leader(self.current_edge, self.id)
+
+        if dist_leader > 2.0:
+            proximity_state = 0 #Lluny (Segur)
+        elif dist_leader > 0.5:
+            proximity_state = 1 #A prop (Alerta)
+        else:
+            proximity_state = 2 #Perill imminent (Molt a prop)
+
         # 3. Velocitat (Discretitzada de 10 en 10 km/h)
         speed_state = int(self.current_speed / 10.0)
         if speed_state > 12: speed_state = 12 # Max 120 km/h
@@ -147,7 +157,7 @@ class Train:
         tid = self.current_edge.track_id if self.current_edge else 0
         is_blocked = TrafficManager.check_alert(self.node.name, self.target.name, tid)
         
-        return (segment_id, dist_state, speed_state, diff_disc, is_blocked)
+        return (segment_id, dist_state, speed_state, diff_disc, is_blocked, proximity_state)
 
     """
     ############################################################################################
@@ -196,6 +206,21 @@ class Train:
         # Per defecte, l'agent decideix
         action_idx = self.agent.action(state)
         
+        if self.is_training:
+            #consultem la distancia al lider
+            dist_leader = TrafficManager.get_distance_to_leader(self.current_edge, self.id)
+            
+            # CRITERI DE SEGURETAT: 
+            # Si hi ha més de 1.5 km d'espai (segur) I no anem a velocitat màxima
+            # I la IA ha decidit NO accelerar (frenar o mantenir), la corregim.
+            DISTANCIA_SEGURA = 1.5  # km
+            
+            if dist_leader > DISTANCIA_SEGURA and action_idx != 0 and self.current_speed < self.max_speed_edge:
+                # Forcem l'acció a ACELERAR (0)
+                action_idx = 0 
+                # Opcional: Podries penalitzar lleument a la IA per ser covarda aquí, 
+                # però el reforç positiu d'avançar sol ser suficient.
+
         # [Override] Mecanisme de seguretat per evitar bucles infinits si l'AI es torna boja
         # Si portem més de 60 minuts de retard, forcem acceleració (excepte si estem frenant per arribar)
         # Nomes es fa al entrenament per audar al ensenyament de la IA
@@ -251,6 +276,15 @@ class Train:
             
             self.arrive_at_station_logic()
         
+        dist_leader = TrafficManager.get_distance_to_leader(self.current_edge, self.id)
+        
+        if dist_leader < 0.5:
+            #MASIVO
+            reward -= 500 
+        elif dist_leader < 1.0 and self.current_speed > 30:
+            #TA LOCO MI LIDL
+            reward -= 50
+
         # F. ACTUALITZACIÓ Q-TABLE
         if self.is_training:
             new_state = None if self.finished else self._get_general_state()

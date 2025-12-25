@@ -416,6 +416,35 @@ class TrafficManager:
                 (tid, p) for tid, p in TrafficManager._train_positions[edge] if tid != train_id
             ]
 
+    @staticmethod
+    def get_distance_to_leader(edge, my_train_id):
+        """
+        calcula distancia entre el tren actual i el de davant en la mateixa via.
+        Retorna la distància en km. Si no hi ha ningú davant, retorna inf
+        """
+        if not edge or edge not in TrafficManager._train_positions:
+            return float('inf')
+        
+        #llista de trens en aquesta via ordenada per progrés
+        trains_on_edge = TrafficManager._train_positions[edge]
+        
+        my_idx = -1
+        for i, (tid, prog) in enumerate(trains_on_edge):
+            if tid == my_train_id:
+                my_idx = i
+                break
+        
+        #Si no estem a la llista o som el primer (índex 0), no hi ha ningú davant
+        if my_idx <= 0:
+            return float('inf')
+            
+        #El tren de davant és el que està a my_idx - 1
+        leader_id, leader_prog = trains_on_edge[my_idx - 1]
+        _, my_prog = trains_on_edge[my_idx]
+        
+        dist_km = (leader_prog - my_prog) * edge.real_length_km
+        return dist_km
+
     # ==========================================
     # UTILITATS I DEBUG
     # ==========================================

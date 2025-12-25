@@ -1,19 +1,19 @@
 === INFORME EXHAUSTIU: Personalitzat (a=0.01) ===
 Dies simulats: 10000
-Retard Final (Mitjana últims 1000 dies): 1.6469 min
-Estabilitat (Std Dev): 0.1062 min
+Retard Final (Mitjana últims 1000 dies): 3.2297 min
+Estabilitat (Std Dev): 0.0842 min
 Epsilon Decay Rate: 0.2
 
 --- MOSTRA DE L'ÚLTIM TREN (Dia 10000) ---
 ESTACIÓ                        | PREVIST  | REAL     | DIF
 -----------------------------------------------------------------
 L'HOSPITALET DE LLOBREGAT      | 1334     | 1334     | +0.0m
-BARCELONA-SANTS                | 1338     | 1337     | -1.1m
-PLACA DE CATALUNYA             | 1340     | 1340     | -0.8m
-ARC DE TRIOMF                  | 1342     | 1342     | -0.6m
-BARCELONA-CLOT-ARAGO           | 1345     | 1345     | -0.6m
-SANT ADRIA DE BESOS            | 1349     | 1348     | -1.6m
-BADALONA                       | 1353     | 1352     | -1.4m
+BARCELONA-SANTS                | 1338     | 1340     | +1.9m
+PLACA DE CATALUNYA             | 1340     | 1343     | +2.2m
+ARC DE TRIOMF                  | 1342     | 1345     | +2.4m
+BARCELONA-CLOT-ARAGO           | 1345     | 1348     | +2.4m
+SANT ADRIA DE BESOS            | 1349     | 1351     | +1.4m
+BADALONA                       | 1353     | 1354     | +0.6m
 MONTGAT                        | 1356     | 1357     | +0.2m
 MONTGAT-NORD                   | 1358     | 1359     | +0.4m
 EL MASNOU                      | 1361     | 1362     | +0.8m
@@ -23,12 +23,12 @@ VILASSAR DE MAR                | 1369     | 1370     | +0.7m
 CABRERA DE MAR-VILASSAR DE MAR | 1370     | 1372     | +1.0m
 MATARO                         | 1376     | 1376     | -0.4m
 SANT ANDREU DE LLAVANERES      | 1381     | 1380     | -1.7m
-ARENYS DE MAR                  | 1387     | 1386     | -1.0m
-CANET DE MAR                   | 1390     | 1389     | -1.1m
-SANT POL DE MAR                | 1394     | 1393     | -1.4m
-CALELLA                        | 1398     | 1397     | -1.4m
-PINEDA DE MAR                  | 1401     | 1400     | -1.1m
-SANTA SUSANNA                  | 1403     | 1403     | -0.6m
-MALGRAT DE MAR                 | 1405     | 1406     | +0.1m
-BLANES                         | 1411     | 1410     | -1.9m
-TORDERA                        | 1418     | 1417     | -1.2m
+ARENYS DE MAR                  | 1387     | 1384     | -3.0m
+CANET DE MAR                   | 1390     | 1387     | -3.1m
+SANT POL DE MAR                | 1394     | 1391     | -3.4m
+CALELLA                        | 1398     | 1394     | -4.4m
+PINEDA DE MAR                  | 1401     | 1397     | -4.1m
+SANTA SUSANNA                  | 1403     | 1400     | -3.6m
+MALGRAT DE MAR                 | 1405     | 1403     | -2.9m
+BLANES                         | 1411     | 1407     | -4.9m
+TORDERA                        | 1418     | 1412     | -6.2m
