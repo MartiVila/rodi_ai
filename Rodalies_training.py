@@ -38,7 +38,7 @@ class RodaliesTraining:
     ]
 
     HYPERPARAMS_PERS_GRID = [
-        {'alpha': 0.01,  'gamma': 0.95, 'epsilon_decay': 0.9,  'label': 'Personalitzat (a=0.01)'}
+        {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Personalitzat (a=0.01)'}
     ]
 
     def __init__(self):
