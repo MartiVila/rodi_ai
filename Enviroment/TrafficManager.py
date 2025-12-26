@@ -370,6 +370,14 @@ class TrafficManager:
     """
 
     @staticmethod
+    def remove_train_from_edge(edge, train_id):
+        """Elimina un tren de una vía específica (usado al cambiar de segmento)."""
+        if edge and edge in TrafficManager._train_positions:
+            TrafficManager._train_positions[edge] = [
+                (tid, p) for tid, p in TrafficManager._train_positions[edge] if tid != train_id
+            ]
+
+    @staticmethod
     def register_segment(u_name, v_name, edge_object):
         """Registra un segment físic al diccionari de cerca ràpida."""
         TrafficManager._physical_segments[(u_name, v_name)] = edge_object
@@ -460,11 +468,11 @@ class TrafficManager:
         
         obstacles = len(self._reported_obstacles)
         if obstacles > 0:
-            print(f"⚠️  ALERTA: Hi ha {obstacles} segments amb incidències reportades!")
+            print(f" ALERTA: Hi ha {obstacles} segments amb incidències reportades!")
 
         print("--- LLISTA DE TRENS ---")
         for t in self.active_trains:
             delay = t.calculate_delay()
             seg = f"{t.node.name[:10]}->{t.target.name[:10]}" if t.target else "Fi Trayecte"
-            print(f"🚄 {t.id % 1000:03d} | {seg:25} | v={t.current_speed:5.1f} | Delay: {delay:+5.1f}m")
+            print(f"{t.id % 1000:03d} | {seg:25} | v={t.current_speed:5.1f} | Delay: {delay:+5.1f}m")
         print("==========================================\n")
