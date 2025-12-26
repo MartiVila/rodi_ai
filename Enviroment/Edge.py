@@ -58,12 +58,28 @@ class Edge:
             self.expected_minutes = 999.0
 
     def draw(self, screen):
-        """Dibuixa la línia entre estacions. Vermell si està trencada, Gris si està bé."""
+        """Dibuixa la línia amb un petit desplaçament lateral (offset) per separar anada i tornada."""
         color = (180, 180, 180) if self.edge_type == EdgeType.NORMAL else (200, 0, 0)
         width = 2
         
-        # Càlcul bàsic de línia
-        start = (self.node1.x, self.node1.y)
-        end = (self.node2.x, self.node2.y)
+        # 1. Calculem vector de direcció
+        dx = self.node2.x - self.node1.x
+        dy = self.node2.y - self.node1.y
+        length = math.sqrt(dx*dx + dy*dy)
+        
+        # 2. Calculem el desplaçament lateral (Vector Perpendicular)
+        offset_dist = 3.0  # Píxeles de separació des del centre
+        
+        off_x, off_y = 0, 0
+        if length > 0:
+            # Vector unitari perpendicular (-y, x)
+            off_x = (-dy / length) * offset_dist
+            off_y = (dx / length) * offset_dist
+
+        modifier = 1
+        
+        # 4. Coordenades finals desplaçades
+        start = (self.node1.x + off_x * modifier, self.node1.y + off_y * modifier)
+        end = (self.node2.x + off_x * modifier, self.node2.y + off_y * modifier)
         
         pygame.draw.line(screen, color, start, end, width)

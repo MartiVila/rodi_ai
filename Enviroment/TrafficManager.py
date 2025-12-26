@@ -34,7 +34,7 @@ class TrafficManager:
     _physical_segments = {}        # {(node_u_name, node_v_name): EdgeObject}
     
     # === CONFIGURACIÓ DE SIMULACIÓ ===
-    SPAWN_INTERVAL = 30    # Minuts entre sortida de trens
+    SPAWN_INTERVAL = 45    # Minuts entre sortida de trens
     RESET_INTERVAL = 210   # Minuts per netejar incidències (Manteniment)
     CHAOS_INTERVAL = 60    # Minuts entre generació d'obstacles aleatoris
 
@@ -104,10 +104,23 @@ class TrafficManager:
         # 1. Esdeveniments de l'entorn (Caos, Manteniment)
         self._handle_mechanics()
 
-        # 2. Generació de nous trens (Spawning)
         if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
             self.last_spawn = self.sim_time
-            self.spawn_line_train(self.current_spawn_line)
+            
+            if self.is_training:
+                line_anada = self.current_spawn_line
+                line_tornada = f"{self.current_spawn_line}_SUD"
+            else:
+                #jo ho deixaria aixi iq eu follin lo de dalt
+                line_anada = 'R1_NORD'
+                line_tornada = 'R1_SUD'
+
+            #anada
+            self.spawn_line_train(line_anada)
+            
+            #tornada
+            if line_tornada in self.lines:
+                self.spawn_line_train(line_tornada)
 
         # 3. Actualització de trens actius
         # Itera sobre una còpia ([:]) per permetre esborrat segur

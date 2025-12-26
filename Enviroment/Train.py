@@ -389,7 +389,7 @@ class Train:
             TrafficManager.remove_train(self.id)
 
     def draw(self, screen):
-        """Dibuixa el tren (cercle) interpolant la seva posició sobre la via."""
+        """Dibuixa el tren (cercle) interpolant la seva posició sobre la via, aplicant l'offset visual."""
         if self.finished or not self.node or not self.target: return
 
         # Codi de colors semàfor segons retard
@@ -407,12 +407,29 @@ class Train:
         dx = end_x - start_x
         dy = end_y - start_y
         
+        # Càlcul del progrés lineal
         progress = max(0.0, min(1.0, self.distance_covered / self.total_distance))
         
+        # Posició base (centre del "passadís" entre nodes)
         cur_x = start_x + dx * progress
         cur_y = start_y + dy * progress
+
+        # --- CORRECCIÓ VISUAL: APLICAR OFFSET ---
+        # Calculem el mateix desplaçament que a Edge.py perquè el tren vagi SOBRE la línia
+        length = math.sqrt(dx*dx + dy*dy)
+        offset_dist = 3.0  # Ha de coincidir amb el valor de Edge.py
         
-        pygame.draw.circle(screen, color, (int(cur_x), int(cur_y)), 6)
+        if length > 0:
+            # Vector unitari perpendicular (-y, x) per desplaçar a la dreta del sentit de marxa
+            off_x = (-dy / length) * offset_dist
+            off_y = (dx / length) * offset_dist
+            
+            # Apliquem el desplaçament a la posició actual
+            cur_x += off_x
+            cur_y += off_y
+
+        # Dibuix
+        pygame.draw.circle(screen, color, (int(cur_x), int(cur_y)), 4)
 
     def __repr__(self):
         origen = self.node.name if self.node else "?"

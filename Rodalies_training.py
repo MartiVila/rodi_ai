@@ -74,17 +74,23 @@ class RodaliesTraining:
             print("[ALERTA] R1_NORD no trobada, curriculum pot fallar.")
             return []
 
-        full_route = manager.lines['R1_NORD'] 
+        full_route_nord = manager.lines['R1_NORD'] 
         
-        # --- DEFINICIÓ DE NIVELLS ---
-        manager.lines['NIVELL_1'] = full_route[:5]    # Inici (Fàcil)
-        manager.lines['NIVELL_2'] = full_route[5:10]  # Mig (Aïllat)
-        manager.lines['NIVELL_3'] = full_route[:10]   # Inici + Mig (Acumulatiu)
-        manager.lines['NIVELL_4'] = full_route[10:15] # Final (Aïllat)
-        manager.lines['NIVELL_5'] = full_route[:15]   # Tot menys últimes (Acumulatiu)
-        manager.lines['NIVELL_6'] = full_route        # Ruta Completa
+        def create_level(name, stations_slice):
+            #fem l'anada
+            manager.lines[name] = stations_slice
+            #Ara aqui tenim la tornada
+            manager.lines[f"{name}_SUD"] = stations_slice[::-1]
+
+        # --- DEFINICIÓ DE NIVELLS (Con ida y vuelta) ---
+        create_level('NIVELL_1', full_route_nord[:5])
+        create_level('NIVELL_2', full_route_nord[5:10])
+        create_level('NIVELL_3', full_route_nord[:10])
+        create_level('NIVELL_4', full_route_nord[10:15])
+        create_level('NIVELL_5', full_route_nord[:15])
+        create_level('NIVELL_6', full_route_nord)        
         
-        print(f"[Curriculum] 6 Nivells generats sobre {len(full_route)} estacions.")
+        print(f"[Curriculum] 6 Nivells BIDIRECCIONALS generats.")
         
         return ['NIVELL_1', 'NIVELL_2', 'NIVELL_3', 'NIVELL_4', 'NIVELL_5', 'NIVELL_6']
 
