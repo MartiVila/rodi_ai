@@ -15,7 +15,7 @@ class RodaliesAI:
     """
 
     # Configuració global de la simulació
-    TIME_SCALE = 10.0  # Factor de temps: 1 segon real = 10 minuts simulats
+    TIME_SCALE = 5.0  # Factor de temps: 1 segon real = 10 minuts simulats
     FPS = 60           # Frames per segon objectiu
 
     """

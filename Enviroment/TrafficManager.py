@@ -324,8 +324,11 @@ class TrafficManager:
     def check_head_on_collision(my_edge, my_progress):
         """
         Versió ARREGLADA (Safe Version).
-        Comprova si ve un tren de cara a la mateixa via física.
+        Comprova si ve un tren de cara a la MATEIXA VIA FÍSICA (mateix track_id).
         Retorna: Distància en km (float). Si és segur, retorna float('inf').
+        
+        IMPORTANT: Para detectar colisiones frontales, debemos buscar trenes
+        que vienen en SENTIDO CONTRARIO pero por la MISMA VÍA FÍSICA (track_id).
         """
         # 1. Validacions bàsiques per evitar errors
         if not my_edge: return float('inf')
@@ -333,7 +336,11 @@ class TrafficManager:
         # 2. Busquem la via inversa (el mateix segment físic però en sentit contrari)
         u_name, v_name = my_edge.node1.name, my_edge.node2.name
         
-        # El track_id ha de ser el mateix per ser un perill "Frontal"
+        # CORRECCIÓN CRÍTICA: El track_id ha de ser el mateix per ser un perill "Frontal"
+        # En la representación actual:
+        # - Track 0 en dirección U->V corresponde a Track 0 en dirección V->U
+        # - Track 1 en dirección U->V corresponde a Track 1 en dirección V->U
+        # Son la MISMA vía física, solo que en sentido contrario
         inverse_edge = TrafficManager.get_edge(v_name, u_name, my_edge.track_id)
         
         # Si la via inversa no existeix, és segur

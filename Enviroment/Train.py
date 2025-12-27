@@ -177,17 +177,24 @@ class Train:
         if dist_oncoming < 2.0: danger_state = 1 
         else: danger_state = 0                   
 
-        # 7. Oportunidad de cambio de vía
+        # 7. Oportunidad de cambio de vía (SOLO SI HAY RAZÓN)
         can_switch = 0
         if self.current_edge:
             other_track = 1 if self.current_edge.track_id == 0 else 0
             other_edge = TrafficManager.get_edge(self.node.name, self.target.name, other_track)
             
             if other_edge:
-                # Aquesta crida SÍ que es manté, ja que mira l'altra via
+                # Verificar que la otra vía está libre de trenes de frente
                 dist_enemy_other = TrafficManager.check_head_on_collision(other_edge, 0.0)
-                if dist_enemy_other > 5.0: 
-                    can_switch = 1 
+                
+                # SOLO permitir cambio si:
+                # 1. La otra vía está libre de tráfico frontal (>5 km)
+                # 2. Y HAY UN MOTIVO: líder cerca (<3 km) o peligro frontal (<5 km)
+                if dist_enemy_other > 5.0:
+                    # Hay motivo para cambiar?
+                    has_reason = (dist_leader < 3.0) or (dist_oncoming < 5.0)
+                    if has_reason:
+                        can_switch = 1 
 
         return (dist_state, speed_state, proximity_state, trend_state, diff_disc, danger_state, can_switch)
     """
@@ -238,6 +245,8 @@ class Train:
         limit = min(self.MAX_SPEED_TRAIN, self.max_speed_edge)
         if self.current_speed > limit:
             self.current_speed = limit
+        if self.current_speed < 1:
+            self.current_speed = 1.0
 
     def brake(self, dt_minutes):
         self.current_speed -= self.BRAKING * dt_minutes
@@ -399,12 +408,20 @@ class Train:
         self.sim_time += dt_minutes
 
         # --- FASE 6: APRENENTATGE ---
-        # --- FASE 6: APRENENTATGE ---
         new_delay = self.calculate_delay()
         reward = -1.0 + self.atp_penalty 
         
         if abs(new_delay) > 2: reward -= 0.5 
-        if action_idx == 3: reward -= 2.0 
+        
+        # PENALIZACIÓN FUERTE por cambio de vía innecesario
+        # Solo queremos cambiar para adelantar/esquivar obstáculos
+        if action_idx == 3:
+            # Si había un motivo válido (líder cerca o peligro frontal), penalización menor
+            has_valid_reason = (dist_leader < 3.0) or (dist_oncoming < 5.0)
+            if has_valid_reason:
+                reward -= 5.0  # Penalización moderada (cambio justificado pero costoso)
+            else:
+                reward -= 15.0  # Penalización ALTA por cambio innecesario 
 
         if self.distance_covered >= self.total_distance:
             if abs(new_delay) <= 2: reward += 100 
@@ -435,8 +452,21 @@ class Train:
 
 
     def attempt_track_switch(self):
-        """Intenta cambiar a la vía paralela en medio del tramo (si existe)."""
+        """Intenta cambiar a la vía paralela SOLO si hay un motivo válido."""
         if not self.current_edge: return
+
+        # VERIFICACIÓN PREVIA: ¿Hay razón para cambiar de vía?
+        dist_leader = self.get_vision_ahead()
+        pct_current = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
+        dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, pct_current)
+        
+        # Solo cambiar si hay un obstáculo real:
+        # - Líder cerca (<3 km) que nos ralentiza
+        # - Tren de frente cercano (<5 km) que requiere maniobra
+        has_valid_reason = (dist_leader < 3.0) or (dist_oncoming < 5.0)
+        
+        if not has_valid_reason:
+            return  # No cambiar de vía sin motivo
 
         current_track = self.current_edge.track_id
         target_track = 1 if current_track == 0 else 0
@@ -448,11 +478,12 @@ class Train:
             # Calculamos el progreso actual para mantenerlo
             pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
             
-            # IMPORTANTE: Verificamos que la nueva vía no tenga un tren viniendo de cara
+            # CRÍTICO: Verificamos que la nueva vía no tenga un tren viniendo de cara
+            # Debe mirar la MISMA VÍA FÍSICA (mismo track_id) en sentido contrario
             dist_enemy = TrafficManager.check_head_on_collision(new_edge, pct)
             
-            # Solo cambiamos si hay un margen de seguridad (ej. 1.5 km libres)
-            if dist_enemy > 2: 
+            # Solo cambiamos si hay un margen de seguridad suficiente
+            if dist_enemy > 3.0:  # Aumentado a 3 km para mayor seguridad
                 # 1. Quitamos el tren de la vía actual
                 TrafficManager.remove_train_from_edge(self.current_edge, self.id)
                 
