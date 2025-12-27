@@ -1,34 +1,34 @@
 === INFORME EXHAUSTIU: Personalitzat (a=0.01) ===
 Dies simulats: 10000
-Retard Final (Mitjana últims 1000 dies): 83.0378 min
-Estabilitat (Std Dev): 117.7713 min
-Epsilon Decay Rate: 0.2
+Retard Final (Mitjana últims 1000 dies): 226.1724 min
+Estabilitat (Std Dev): 60.8933 min
+Epsilon Decay Rate: 0.8
 
 --- MOSTRA DE L'ÚLTIM TREN (Dia 10000) ---
 ESTACIÓ                        | PREVIST  | REAL     | DIF
 -----------------------------------------------------------------
-TORDERA                        | 1290     | 1290     | +0.0m
-BLANES                         | 1296     | 1296     | -0.4m
-MALGRAT DE MAR                 | 1302     | 1302     | -0.4m
-SANTA SUSANNA                  | 1304     | 1306     | +1.4m
-PINEDA DE MAR                  | 1307     | 1310     | +2.9m
-CALELLA                        | 1309     | 1314     | +4.1m
-SANT POL DE MAR                | 1313     | 1318     | +4.1m
-CANET DE MAR                   | 1318     | 1322     | +3.9m
-ARENYS DE MAR                  | 1321     | 1326     | +4.8m
-SANT ANDREU DE LLAVANERES      | 1326     | 1332     | +5.5m
-MATARO                         | 1331     | 1338     | +6.2m
-CABRERA DE MAR-VILASSAR DE MAR | 1337     | 1344     | +6.8m
-VILASSAR DE MAR                | 1338     | 1348     | +9.0m
-PREMIA DE MAR                  | 1342     | 1352     | +9.4m
-OCATA                          | 1345     | 1356     | +10.2m
-EL MASNOU                      | 1347     | 1360     | +13.0m
-MONTGAT-NORD                   | 1349     | 1364     | +14.4m
-MONTGAT                        | 1351     | 1370     | +18.6m
-BADALONA                       | 1354     | 1374     | +19.2m
-SANT ADRIA DE BESOS            | 1358     | 1378     | +19.4m
-BARCELONA-CLOT-ARAGO           | 1362     | 1382     | +19.4m
-ARC DE TRIOMF                  | 1365     | 1386     | +20.3m
-PLACA DE CATALUNYA             | 1367     | 1390     | +22.6m
-BARCELONA-SANTS                | 1370     | 1394     | +23.9m
-L'HOSPITALET DE LLOBREGAT      | 1374     | 1398     | +23.8m
+L'HOSPITALET DE LLOBREGAT      | 1290     | 1290     | +0.0m
+BARCELONA-SANTS                | 1294     | 1292     | -2.1m
+PLACA DE CATALUNYA             | 1296     | 1296     | -0.8m
+ARC DE TRIOMF                  | 1298     | 1300     | +1.4m
+BARCELONA-CLOT-ARAGO           | 1301     | 1304     | +2.4m
+SANT ADRIA DE BESOS            | 1305     | 1308     | +2.4m
+BADALONA                       | 1309     | 1312     | +2.6m
+MONTGAT                        | 1312     | 1316     | +3.2m
+MONTGAT-NORD                   | 1314     | 1320     | +5.4m
+EL MASNOU                      | 1317     | 1324     | +6.8m
+OCATA                          | 1318     | 1334     | +15.6m
+PREMIA DE MAR                  | 1321     | 1340     | +18.3m
+VILASSAR DE MAR                | 1325     | 1344     | +18.7m
+CABRERA DE MAR-VILASSAR DE MAR | 1326     | 1348     | +21.0m
+MATARO                         | 1332     | 1358     | +25.6m
+SANT ANDREU DE LLAVANERES      | 1337     | 1364     | +26.3m
+ARENYS DE MAR                  | 1343     | 1370     | +27.0m
+CANET DE MAR                   | 1346     | 1374     | +27.9m
+SANT POL DE MAR                | 1350     | 1378     | +27.6m
+CALELLA                        | 1354     | 1382     | +27.6m
+PINEDA DE MAR                  | 1357     | 1386     | +28.9m
+SANTA SUSANNA                  | 1359     | 1390     | +30.4m
+MALGRAT DE MAR                 | 1361     | 1394     | +32.1m
+BLANES                         | 1367     | 1400     | +32.1m
+TORDERA                        | 1374     | 1406     | +31.8m

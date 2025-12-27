@@ -32,15 +32,19 @@ class RodaliesTraining:
 
     # Hiperparàmetres a provar
     HYPERPARAMS_GRID = [
+        # El decay és el percentatge que es conserva
         {'alpha': 0.9,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Agressiu (a=0.9)'},
         {'alpha': 0.7,  'gamma': 0.99, 'epsilon_decay': 0.5,  'label': 'Equilibrat (a=0.7)'},
         {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'}
     ]
 
-    HYPERPARAMS_PERS_GRID = [
+    """HYPERPARAMS_PERS_GRID = [
         {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Personalitzat (a=0.01)'}
     ]
-
+    """
+    HYPERPARAMS_PERS_GRID = [
+        {'alpha': 0.8,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Personalitzat (a=0.01)'}
+    ]
     def __init__(self):
         """Inicialitza l'entorn de treball i crea els directoris necessaris."""
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)

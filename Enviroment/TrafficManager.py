@@ -13,7 +13,8 @@ from Enviroment.Edge import Edge
 from Enviroment.EdgeType import EdgeType
 
 # Valors per defecte
-DEFAULT_AGENT_PARAMS = [0.7, 0.99, 0.99]
+#DEFAULT_AGENT_PARAMS = [0.7, 0.99, 0.99]
+DEFAULT_AGENT_PARAMS = [0.5, 0.99, 0.01]
 
 class TrafficManager:
     """

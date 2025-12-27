@@ -372,10 +372,14 @@ class Train:
             self.brake(dt_minutes)
         elif action_idx == 3: 
             # [PUNT DE RISC 3] Canvi de via (crida TrafficManager)
-            if self.current_speed < 40.0 and dist_oncoming > 1.5:
+            if self.current_speed < 40.0: #and dist_oncoming > 2:
+                self.atp_penalty += -2
                 self.attempt_track_switch()
-            else:
-                if self.is_training: self.agent.update(state, 3, -50.0, state)
+            #else:
+                #if self.is_training: self.agent.update(state, 3, -50.0, state)
+                #self.agent.update(state, 3, -50.0, state)
+
+    
 
         if self.current_speed > current_limit: 
             self.current_speed = current_limit
@@ -407,26 +411,27 @@ class Train:
             else: reward += 10 - min(50, abs(new_delay) * 2)
             self.arrive_at_station_logic()
         
-        if self.is_training:
-            self.last_dist_leader = dist_leader
-            
-            # --- CORRECCIÓ DE L'ERROR ---
-            try:
-                new_state = None
-                if not self.finished:
-                    # 1. Recalculem els sensors per a la NOVA posició (s')
-                    #    És necessari perquè el tren s'ha mogut i l'entorn ha canviat.
-                    new_dist_leader = self.get_vision_ahead()
-                    
-                    new_pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
-                    new_dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, new_pct)
-                    
-                    # 2. Passem els nous arguments obligatoris
-                    new_state = self._get_general_state(new_dist_leader, new_dist_oncoming)
+        #if self.is_training:
+        self.last_dist_leader = dist_leader
+        
+        # --- CORRECCIÓ DE L'ERROR ---
+        try:
+            new_state = None
+            if not self.finished:
+                # 1. Recalculem els sensors per a la NOVA posició (s')
+                #    És necessari perquè el tren s'ha mogut i l'entorn ha canviat.
+                new_dist_leader = self.get_vision_ahead()
+                
+                new_pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
+                new_dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, new_pct)
+                
+                # 2. Passem els nous arguments obligatoris
+                new_state = self._get_general_state(new_dist_leader, new_dist_oncoming)
 
-                self.agent.update(state, action_idx, reward, new_state)
-            except Exception as e:
-                print(f"Error actualitzant Agent: {e}")
+            self.agent.update(state, action_idx, reward, new_state)
+        except Exception as e:
+            print(f"Error actualitzant Agent: {e}")
+
 
 
     def attempt_track_switch(self):
@@ -437,7 +442,6 @@ class Train:
         target_track = 1 if current_track == 0 else 0
         
         # Solicitamos la vía paralela (track_id inverso)
-        # Nota: Esto asume que TrafficManager.get_edge acepta el 3er argumento track_id
         new_edge = TrafficManager.get_edge(self.node.name, self.target.name, target_track)
         
         if new_edge:
@@ -448,7 +452,7 @@ class Train:
             dist_enemy = TrafficManager.check_head_on_collision(new_edge, pct)
             
             # Solo cambiamos si hay un margen de seguridad (ej. 1.5 km libres)
-            if dist_enemy > 1.5: 
+            if dist_enemy > 2: 
                 # 1. Quitamos el tren de la vía actual
                 TrafficManager.remove_train_from_edge(self.current_edge, self.id)
                 
@@ -489,10 +493,11 @@ class Train:
             TrafficManager.remove_train(self.id)
 
     def draw(self, screen):
-        """Dibuixa el tren sobre la via corresponent (0 o 1)."""
+        """Dibuixa el tren sobre la via corresponent (0 o 1) amb l'offset correcte."""
         if self.finished or not self.node or not self.target: return
 
-        # Gestió de colors (igual que tenies)
+        # ... (Gestió de colors igual que abans) ...
+        # (Copia aquí la teva lògica de colors existent)
         if getattr(self, 'crashed', False):
             color = (0, 0, 0)
         elif self.is_waiting:
@@ -514,21 +519,21 @@ class Train:
         cur_x = start_x + dx * progress
         cur_y = start_y + dy * progress
 
-        # --- CORRECCIÓ VISUAL: OFFSET DINÀMIC SEGONS VIA ---
+        # --- CORRECCIÓ VISUAL: OFFSET COHERENT AMB EDGE.PY ---
         length = math.sqrt(dx*dx + dy*dy)
         
-        # Determinem a quina via estem realment
         current_track = 0
         if self.current_edge:
             current_track = self.current_edge.track_id
             
-        # Apliquem el mateix decalatge que a Edge.py
+        # [CANVI] Mateixos valors que a Edge.py
         if current_track == 0:
-            offset_dist = 3.0
+            offset_dist = 6.0   # Via Interior
         else:
-            offset_dist = 8.0  # Via paral·lela exterior
+            offset_dist = -10.0  # Via Exterior
         
         if length > 0:
+            # El vector perpendicular posa el tren exactament sobre la línia dibuixada
             off_x = (-dy / length) * offset_dist
             off_y = (dx / length) * offset_dist
             

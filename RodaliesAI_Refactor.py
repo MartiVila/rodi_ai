@@ -108,26 +108,33 @@ class RodaliesAI:
                         self.manager.brain.debug_qtable_stats()
 
     def _draw(self):
-        """
-        Renderitza l'estat actual de la simulació a la pantalla.
-        L'ordre de dibuix és important (capes): Fons -> Vies -> Estacions -> Trens -> HUD.
-        """
-        self.screen.fill((240, 240, 240)) # Fons gris clar
+        self.screen.fill((240, 240, 240)) 
         
-        # Dibuixem elements estàtics (Vies i Nodes)
-        for e in self.manager.all_edges: 
-            e.draw(self.screen)
+        # --- CANVI AQUÍ: Dibuixem només una aresta per via física ---
+        drawn_segments = set()
+
+        for e in self.manager.all_edges:
+            # Creem un ID únic per al tram físic, independent de la direcció
+            # Ordenem els noms dels nodes perquè A->B i B->A tinguin el mateix ID
+            n1_name = e.node1.name
+            n2_name = e.node2.name
+            sorted_pair = tuple(sorted((n1_name, n2_name)))
+            
+            # La clau és (NodeA, NodeB, ID_Via)
+            segment_id = (sorted_pair, e.track_id)
+
+            if segment_id not in drawn_segments:
+                e.draw(self.screen)
+                drawn_segments.add(segment_id)
+        # -------------------------------------------------------------
             
         for n in self.manager.nodes.values(): 
             n.draw(self.screen)
             
-        # Dibuixem elements dinàmics (Trens)
         for t in self.manager.active_trains: 
             t.draw(self.screen)
         
-        # HUD / Informació en pantalla
         self._draw_hud()
-
         pygame.display.flip()
 
     def _cleanup(self):

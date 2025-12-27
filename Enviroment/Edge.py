@@ -58,7 +58,9 @@ class Edge:
             self.expected_minutes = 999.0
 
     def draw(self, screen):
-        """Dibuixa la línia amb un petit desplaçament lateral (offset) per separar anada i tornada."""
+        """
+        Dibuixa la línia tenint en compte el Track ID per separar visualment les vies.
+        """
         color = (180, 180, 180) if self.edge_type == EdgeType.NORMAL else (200, 0, 0)
         width = 2
         
@@ -67,8 +69,15 @@ class Edge:
         dy = self.node2.y - self.node1.y
         length = math.sqrt(dx*dx + dy*dy)
         
-        # 2. Calculem el desplaçament lateral (Vector Perpendicular)
-        offset_dist = 3.0  # Píxeles de separació des del centre
+        # 2. DEFINIR OFFSET SEGONS EL TRACK_ID (Augmentat per evitar xocs visuals)
+        # Els trens tenen radi 4 (ample 8). Necessitem >4px de marge.
+        # Via 0 (Interior): 6px
+        # Via 1 (Exterior): 16px
+        # Així hi ha 10px de separació entre vies, suficient perquè els trens no es toquin.
+        if self.track_id == 0:
+            offset_dist = 6.0 
+        else:
+            offset_dist = 8.0
         
         off_x, off_y = 0, 0
         if length > 0:
@@ -76,10 +85,10 @@ class Edge:
             off_x = (-dy / length) * offset_dist
             off_y = (dx / length) * offset_dist
 
-        modifier = 1
-        
-        # 4. Coordenades finals desplaçades
-        start = (self.node1.x + off_x * modifier, self.node1.y + off_y * modifier)
-        end = (self.node2.x + off_x * modifier, self.node2.y + off_y * modifier)
+        # 3. Coordenades finals desplaçades
+        # Nota: Això separarà automàticament l'anada de la tornada perquè 
+        # el vector (dx,dy) s'inverteix en sentit contrari.
+        start = (self.node1.x + off_x, self.node1.y + off_y)
+        end = (self.node2.x + off_x, self.node2.y + off_y)
         
         pygame.draw.line(screen, color, start, end, width)
