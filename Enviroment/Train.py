@@ -16,7 +16,7 @@ class Train:
     MAX_SPEED_TRAIN = 120.0 # Velocitat màxima del material rodant
     BRAKING_DISTANCE_KM = 0.1 # Distància de seguretat per frenar davant estació
 
-    def __init__(self, agent, route_nodes, schedule, start_time_sim, is_training=False):
+    def __init__(self, agent, route_nodes, schedule, start_time_sim, is_training=False, prefered_track=0):
         """
         :param agent: Referència al QLearningAgent compartit.
         :param route_nodes: Llista d'objectes Node que formen la ruta.
@@ -63,7 +63,7 @@ class Train:
         self.atp_penalty = 0.0
 
         #Inicialitzem el primer segment
-        self.setup_segment()
+        self.setup_segment(preferred_track=prefered_track)
 
     def setup_segment(self, preferred_track=None):
         """
@@ -496,7 +496,7 @@ class Train:
         """Dibuixa el tren sobre la via corresponent (0 o 1) amb l'offset correcte."""
         if self.finished or not self.node or not self.target: return
 
-        # ... (Gestió de colors igual que abans) ...
+        # ... (Codi de colors existent es manté igual) ...
         # (Copia aquí la teva lògica de colors existent)
         if getattr(self, 'crashed', False):
             color = (0, 0, 0)
@@ -519,18 +519,29 @@ class Train:
         cur_x = start_x + dx * progress
         cur_y = start_y + dy * progress
 
-        # --- CORRECCIÓ VISUAL: OFFSET COHERENT AMB EDGE.PY ---
         length = math.sqrt(dx*dx + dy*dy)
         
         current_track = 0
         if self.current_edge:
             current_track = self.current_edge.track_id
             
-        # [CANVI] Mateixos valors que a Edge.py
+        # [CORRECCIÓ VISUAL DEFINITIVA]
+        # Detectem si estem anant en direcció "Normal" (Anada) o "Inversa" (Tornada)
+        # Això és necessari perquè l'offset perpendicular canvia de costat segons el sentit.
+        
+        # Assumim 'Anada' si el parell (Origen, Destí) està definit a Datas
+        is_anada = (self.node.name, self.target.name) in Datas.R1_CONNECTIONS
+        
         if current_track == 0:
-            offset_dist = 6.0   # Via Interior
+            # Via Interior (0)
+            # Si anem 'Anada': Offset positiu (6.0) -> Baixa (Dreta)
+            # Si anem 'Tornada': Offset negatiu (-6.0) -> Baixa (Dreta respecte a l'Anada)
+            offset_dist = 6.0 if is_anada else -6.0
         else:
-            offset_dist = -10.0  # Via Exterior
+            # Via Exterior (1)
+            # Si anem 'Anada' (Overtaking): Offset negatiu (-10.0) -> Puja (Esquerra)
+            # Si anem 'Tornada' (Normal Track 1): Offset positiu (10.0) -> Puja (Esquerra respecte a l'Anada)
+            offset_dist = -10.0 if is_anada else 10.0
         
         if length > 0:
             # El vector perpendicular posa el tren exactament sobre la línia dibuixada

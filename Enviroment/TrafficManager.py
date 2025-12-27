@@ -133,6 +133,11 @@ class TrafficManager:
             if name_norm in self.nodes:
                 route_nodes.append(self.nodes[name_norm])
         
+        # [MODIFICACIÓ] Decidim la via inicial segons el nom de la línia
+        # R1_NORD -> Via 0
+        # R1_SUD  -> Via 1
+        starting_track = 1 if "SUD" in line_name else 0
+
         if len(route_nodes) > 1:
             schedule = self.calculate_schedule(route_nodes, self.sim_time)
             
@@ -141,12 +146,14 @@ class TrafficManager:
                 route_nodes=route_nodes, 
                 schedule=schedule, 
                 start_time_sim=self.sim_time, 
-                is_training=self.is_training
+                is_training=self.is_training,
+                prefered_track=starting_track # <--- AFEGIM AQUEST ARGUMENT
             )
             
             self.active_trains.append(new_train)
             if not self.is_training:
-                print(f"[Spawn] Tren {new_train.id} sortint de {route_nodes[0].name}")
+                # Opcional: Afegim info al print per debug
+                print(f"[Spawn] Tren {new_train.id} sortint de {route_nodes[0].name} (Via {starting_track})")
 
     def calculate_schedule(self, route_nodes, start_time):
         schedule = {}
