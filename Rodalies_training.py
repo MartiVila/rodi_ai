@@ -103,6 +103,8 @@ class RodaliesTraining:
     ############################################################################################
     ############################################################################################
     """
+    #TEMPS PAS MES RAPID
+    DT_STEP = 2.0
 
     def run_experiment(self, params):
         """
@@ -176,11 +178,11 @@ class RodaliesTraining:
             manager.reset_network_status()
             
             delays_in_step = []
-            
+            steps_per_day = int(self.MINUTES_PER_DAY // self.DT_STEP)
             # C. SIMULACIÓ (STEPS)
             # Executem 1440 minuts simulats
-            for _ in range(self.MINUTES_PER_DAY):
-                manager.update(dt_minutes=1.0)
+            for _ in range(steps_per_day):
+                manager.update(dt_minutes=self.DT_STEP) 
                 
                 # Recollida de mètriques en temps real
                 if manager.active_trains:
