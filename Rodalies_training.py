@@ -219,6 +219,8 @@ class RodaliesTraining:
 
         # Guardat final en acabar l'experiment
         manager.brain.save_table(brain_path)
+
+        self._save_complete_csv(manager.completed_train_logs, params)
         return history_avg_delay, manager.completed_train_logs, manager
 
     """
@@ -266,6 +268,67 @@ class RodaliesTraining:
                     else:
                         f.write(f"{name:<30} | {int(exp):04d}     | ----     | N/A\n")
         print(f"[Informe] Guardat: {filename}")
+
+    def _save_complete_csv(self, logs, params):
+        """
+        Genera un CSV massiu amb cada parada de cada tren.
+        Format: TrenID, Dia, Estació, Hora_Prevista, Hora_Real, Retard, Estat
+        """
+        import csv
+        safe_label = params['label'].replace(' ', '_').replace('(', '').replace(')', '').replace('=', '')
+        filename = f"{self.OUTPUT_DIR}/FULL_DATA_{safe_label}.csv"
+        
+        print(f"Generant CSV complet ({len(logs)} trens registrats)...")
+        
+        with open(filename, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file, delimiter=';') # Punt i coma per Excel europeu
+            
+            # Capçalera
+            writer.writerow(['Tren_ID', 'Origen_Global', 'Desti_Global', 'Estacio', 'Ordre', 'Previst', 'Real', 'Retard_Min', 'Estat'])
+            
+            for train_data in logs:
+                # Dades generals del tren
+                # Assumim que l'ID del tren pot ser llarg, agafem els últims digits o l'hash
+                t_id = train_data.get('id', 0)
+                # Reconstruim la ruta ordenada
+                schedule_map = train_data.get('schedule', {})
+                actuals_map = train_data.get('actuals', {})
+                route_names = train_data.get('route_map', {})
+                
+                # Ordenem les estacions per hora prevista per saber l'ordre
+                sorted_schedule = sorted(schedule_map.items(), key=lambda x: x[1])
+                
+                if not sorted_schedule: continue
+                
+                origin_name = route_names.get(sorted_schedule[0][0], "?")
+                dest_name = route_names.get(sorted_schedule[-1][0], "?")
+                
+                for idx, (node_id, expected_time) in enumerate(sorted_schedule):
+                    station_name = route_names.get(node_id, f"Node_{node_id}")
+                    actual_time = actuals_map.get(station_name)
+                    
+                    if actual_time:
+                        delay = actual_time - expected_time
+                        status = "PUNTUAL"
+                        if delay > 2: status = "TARD"
+                        if delay > 10: status = "MOLT TARD"
+                        if delay < -2: status = "AVANÇAT"
+                        
+                        writer.writerow([
+                            t_id, origin_name, dest_name, 
+                            station_name, idx + 1, 
+                            f"{expected_time:.2f}", f"{actual_time:.2f}", 
+                            f"{delay:.2f}", status
+                        ])
+                    else:
+                        writer.writerow([
+                            t_id, origin_name, dest_name, 
+                            station_name, idx + 1, 
+                            f"{expected_time:.2f}", "---", 
+                            "---", "CANCEL·LAT/NO ARRIBAT"
+                        ])
+                        
+        print(f"[Informe] CSV Complet guardat a: {filename}")
 
     def run_grid_search(self):
         """

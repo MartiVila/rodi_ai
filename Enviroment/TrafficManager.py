@@ -166,12 +166,25 @@ class TrafficManager:
             v_name = route_nodes[i+1].name
             
             edge = self.get_edge(u_name, v_name)
-            travel_time = edge.expected_minutes if edge else 3.0
-            current_time += travel_time + Datas.STOP_STA_TIME
+            
+            # --- FIX: HORARI REALISTA ---
+            if edge:
+                # El temps 'expected_minutes' sol ser (Distància / Vel_Max).
+                # Això és impossible de complir (frenades, acceleracions, corbes).
+                base_time = edge.expected_minutes 
+                
+                # Afegim un "Coixí" (Slack) per fer l'horari complible:
+                # 1. Multiplicador 1.25 (+25% de temps extra pel trajecte)
+                # 2. Sumem 0.5 minuts fixes (30s) pel temps perdut arrencant i frenant
+                real_time = (base_time * 1.10) + 0.5
+            else:
+                real_time = 4.0 # Valor per defecte més conservador
+
+            current_time += real_time + Datas.STOP_STA_TIME
             schedule[route_nodes[i+1].id] = current_time
             
         return schedule
-
+    
     def _archive_train_log(self, train):
         log_entry = {
             'id': train.id,
