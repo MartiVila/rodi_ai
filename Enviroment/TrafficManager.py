@@ -27,7 +27,7 @@ class TrafficManager:
     _physical_segments = {}        # {(node_u_name, node_v_name): EdgeObject}
     
     # === CONFIGURACIÓ ===
-    SPAWN_INTERVAL = 45    
+    SPAWN_INTERVAL = 9    
     RESET_INTERVAL = 210   
     CHAOS_INTERVAL = 60    
 
@@ -156,8 +156,14 @@ class TrafficManager:
                 print(f"[Spawn] Tren {new_train.id} sortint de {route_nodes[0].name} (Via {starting_track})")
 
     def calculate_schedule(self, route_nodes, start_time):
+        """
+        Genera l'horari basant-se en els temps OFICIALS de Renfe (Datas.py).
+        Això elimina els càlculs físics erronis i posa objectius reals.
+        """
         schedule = {}
         current_time = start_time
+        
+        # El primer node és l'origen, hora = start_time
         if route_nodes:
             schedule[route_nodes[0].id] = current_time
         
@@ -165,22 +171,15 @@ class TrafficManager:
             u_name = route_nodes[i].name
             v_name = route_nodes[i+1].name
             
-            edge = self.get_edge(u_name, v_name)
+            # 1. Obtenim el temps REAL de l'horari (PDF)
+            official_travel_time = Datas.get_travel_time(u_name, v_name)
             
-            # --- FIX: HORARI REALISTA ---
-            if edge:
-                # El temps 'expected_minutes' sol ser (Distància / Vel_Max).
-                # Això és impossible de complir (frenades, acceleracions, corbes).
-                base_time = edge.expected_minutes 
-                
-                # Afegim un "Coixí" (Slack) per fer l'horari complible:
-                # 1. Multiplicador 1.25 (+25% de temps extra pel trajecte)
-                # 2. Sumem 0.5 minuts fixes (30s) pel temps perdut arrencant i frenant
-                real_time = (base_time * 1.10) + 0.5
-            else:
-                real_time = 4.0 # Valor per defecte més conservador
-
-            current_time += real_time + Datas.STOP_STA_TIME
+            # 2. Afegim l'aturada tècnica (els horaris ja solen incloure part d'això,
+            # però per la IA li donem el temps de viatge + parada)
+            # Nota: Al PDF, el temps és d'arribada a arribada aprox.
+            # Aquí sumem: Temps Viatge + Parada Estació.
+            current_time += official_travel_time + Datas.STOP_STA_TIME
+            
             schedule[route_nodes[i+1].id] = current_time
             
         return schedule
