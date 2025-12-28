@@ -252,228 +252,174 @@ class Train:
         self.distance_covered += distance_step
 
     def update(self, dt_minutes):
-        # [DEBUG] Identificador
-        debug = self.is_training and (self.id % 10 == 0)
-        
         if self.finished: return
         self.atp_penalty = 0.0 
 
-        # -----------------------------------------------------------
-        # MODIFICACIÓ 1: LÒGICA D'APARTADERO (Anti-Xoc Frontal)
-        # -----------------------------------------------------------
+        # --- LÒGICA APARTADERO (Mantenim la teva, és correcta) ---
         if self.is_waiting:
             self.sim_time += dt_minutes
             self.wait_timer -= dt_minutes
             if self.wait_timer <= 0:
                 next_idx = self.current_node_idx + 1
                 if next_idx < len(self.route_nodes) - 1:
-                    next_u = self.route_nodes[next_idx]
-                    next_v = self.route_nodes[next_idx + 1]
-                    
-                    # 1. Busquem via lliure
+                    next_u, next_v = self.route_nodes[next_idx], self.route_nodes[next_idx + 1]
                     safe_track = TrafficManager.get_safe_track(next_u.name, next_v.name)
-                    
                     if safe_track is not None:
-                        # 2. CHECK EXTRA: Ve algú de cara en aquesta via "segura"?
                         target_edge = TrafficManager.get_edge(next_u.name, next_v.name, safe_track)
-                        if target_edge:
-                            # Mirem tot el tram (10km) per si ve algú
-                            dist_incoming = TrafficManager.check_head_on_collision(target_edge, 0.0)
-                            if dist_incoming < 10.0:
-                                self.wait_timer = 0.5 # Ens esperem a l'apartadero
-                                return 
-
+                        if target_edge and TrafficManager.check_head_on_collision(target_edge, 0.0) < 10.0:
+                            self.wait_timer = 0.5; return 
                         self.depart_from_station(preferred_track=safe_track)
-                    else:
-                        self.wait_timer = 0.5
-                else:
-                    self.depart_from_station()
+                    else: self.wait_timer = 0.5
+                else: self.depart_from_station()
             return 
-        # -----------------------------------------------------------
 
-        # --- FASE 1: PERCEPCIÓ (Original) ---
+        # --- FASE 1: PERCEPCIÓ ---
         try:
             dist_leader = self.get_vision_ahead()
-            progress_pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
-            dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, progress_pct)
+            pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
+            dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, pct)
             state = self._get_general_state(dist_leader, dist_oncoming)
-        except Exception as e:
-            self.finished = True
-            return
+        except: self.finished = True; return
 
-        # --- FASE 2: DECISIÓ (Original) ---
-        try:
-            action_idx = self.agent.action(state)
-        except Exception:
-            action_idx = 0 
+        # --- FASE 2: DECISIÓ ---
+        try: action_idx = self.agent.action(state)
+        except: action_idx = 0 
 
-        # --- AJUDES ENTRENAMENT (Original) ---
-        current_delay = self.calculate_delay()
-        if current_delay > 60 and self.is_training:
-             self.agent.update(state, 2, -100, None) 
-             action_idx = 0 
+        # Ajudes entrenament (Anti-Blocking)
         if self.current_speed < 1.0 and action_idx != 0 and self.is_training:
-            if random.random() < 0.5: action_idx = 0
+            if random.random() < 0.2: action_idx = 0 # Forcem arrencada a vegades
 
-        # --- MODIFICACIÓ 2: ENTRADA MÉS RÀPIDA A ESTACIÓ ---
-        # Mantenim el teu codi, però pugem la velocitat mínima d'aproximació
-        dist_remaining = self.total_distance - self.distance_covered
-        if dist_remaining <= self.BRAKING_DISTANCE_KM:
-            pct_dist = dist_remaining / self.BRAKING_DISTANCE_KM
-            
-            # ABANS: target_approach_speed = pct_dist * 80.0 + 15.0
-            # ARA: (+ 40.0) permet entrar a l'andana a 40km/h i frenar al final
-            target_approach_speed = pct_dist * 80.0 + 40.0 
-            
-            if self.current_speed > target_approach_speed:
-                self.current_speed = target_approach_speed
+        # Entrada a estació (Mantenim la teva millora)
+        dist_rem = self.total_distance - self.distance_covered
+        if dist_rem <= self.BRAKING_DISTANCE_KM:
+            target_approach = (dist_rem / self.BRAKING_DISTANCE_KM) * 80.0 + 40.0 
+            if self.current_speed > target_approach:
+                self.current_speed = target_approach
                 action_idx = 2 
 
-        # --- FASE 3: ATP (Original) ---
-        override_speed_limit = float('inf')
-        atp_intervention = False
+        # --- FASE 3: ATP (POLIDA per evitar frenades fantasmes) ---
+        override_speed = float('inf')
+        
+        # 1. Protecció contra xoc frontal (Prioritat Màxima)
+        if dist_oncoming < 3.0:
+            override_speed = 0.0
+            if self.current_speed > 10: self.atp_penalty = -100 # Penalització greu
 
-        if dist_leader < 5.0:
-            if dist_leader < 0.2:   override_speed_limit = 0.0 
-            elif dist_leader < 1.0: override_speed_limit = 15.0
-            elif dist_leader < 3.0: override_speed_limit = 45.0
-            elif dist_leader < 5.0: override_speed_limit = 80.0
+        # 2. Protecció abast (Líder davant)
+        # Només apliquem limitacions si el líder està realment a prop
+        elif dist_leader < 3.0: 
+            if dist_leader < 0.2: override_speed = 0.0
+            elif dist_leader < 1.0: override_speed = 30.0
+            elif dist_leader < 2.0: override_speed = 60.0
+            else: override_speed = 100.0 # < 3.0 km, permetem 100 km/h
 
-        if dist_oncoming < 2.0:
-            override_speed_limit = 0.0 
-            if self.current_speed > 5.0: atp_intervention = True 
-
-        current_limit = min(self.max_speed_edge, override_speed_limit)
+        current_limit = min(self.max_speed_edge, override_speed)
         
         if self.current_speed > current_limit:
-            self.current_speed -= (self.BRAKING * 1.5) * dt_minutes
+            self.current_speed -= (self.BRAKING * 2.0) * dt_minutes # Frenada d'emergència forta
             if self.current_speed < current_limit: self.current_speed = current_limit
-            
-            if self.is_training:
-                self.atp_penalty = -50.0 if override_speed_limit < self.max_speed_edge else -10.0
+            if self.is_training: self.atp_penalty -= 5.0
 
-        # --- FASE 4: ACTUAR (Original intacte) ---
+        # --- FASE 4: ACTUAR (AMB CORRECCIÓ D'ERROR "MID-TRACK STOP") ---
         if action_idx == 0: 
             self.accelerate(dt_minutes)
         elif action_idx == 1: 
-            pass
+            pass # Mantenir inèrcia
         elif action_idx == 2: 
             self.brake(dt_minutes)
         elif action_idx == 3: 
-            if self.current_speed < 40.0:
-                self.atp_penalty += -2
-                self.attempt_track_switch()
+            # INTENT DE CANVI DE VIA
+            switched = self.attempt_track_switch()
+            if not switched:
+                # [FIX IMPORTANTÍSSIM]
+                # Si vol canviar de via però NO POT (perquè està al mig del camp),
+                # no el deixem "coasting". Convertim l'acció en ACCELERAR.
+                # Això evita que es quedi parat al mig de la via intentant canviar.
+                self.atp_penalty -= 2.0 # Penalitzem l'intent inútil
+                self.accelerate(dt_minutes) # I l'obliguem a córrer
 
-        if self.current_speed > current_limit: 
-            self.current_speed = current_limit
+        if self.current_speed > current_limit: self.current_speed = current_limit
 
-        # --- FASE 5: FÍSICA (Original intacte) ---
-        distance_step = self.current_speed * (dt_minutes / 60.0)
+        # --- FASE 5: FÍSICA ---
+        dist_step = self.current_speed * (dt_minutes / 60.0)
         
+        # Evitar xoc físic (amb buffer de 10 metres)
         if dist_leader < float('inf'):
-            SAFE_GAP_KM = 0.02
-            available_space = dist_leader - SAFE_GAP_KM
-            if distance_step > available_space:
-                distance_step = max(0.0, available_space)
-                self.current_speed = 0.0 
+            avail = dist_leader - 0.01 
+            if dist_step > avail:
+                dist_step = max(0.0, avail)
+                self.current_speed = 0.0 # Xoc o parada darrere líder
 
-        self.distance_covered += distance_step
-        TrafficManager.update_train_position(self.current_edge, self.id, self.distance_covered / self.total_distance)
+        self.distance_covered += dist_step
+        TrafficManager.update_train_position(self.current_edge, self.id, self.distance_covered/self.total_distance)
         self.sim_time += dt_minutes
 
-        # --- FASE 6: APRENENTATGE (COMBINAT: ANTIDEPRESSIU + PUNTUALITAT) ---
+        # --- FASE 6: RECOMPENSES (Mantenim la teva lògica de puntualitat) ---
         new_delay = self.calculate_delay()
+        reward = -0.1 + self.atp_penalty 
         
-        # 1. BASE SUAU (Antidepressiu part 1)
-        # Penalització existencial baixa perquè no es vulgui "suïcidar" (quedar parat)
-        reward = -0.3 + self.atp_penalty 
-        
-        # 2. INCENTIU DE MOVIMENT (Antidepressiu part 2 - RECUPERAT)
-        # Això és vital perquè l'agent sàpiga que moure's és millor que esperar.
-        if self.current_speed > 5.0:
-            reward += 0.5   # Recompensa clara per estar en marxa
-        elif not self.is_waiting:
-            reward -= 4.0   # Càstig SEVER per parar-se al mig de la via
-        
-        # 3. PENALITZACIÓ PER RETARD (La novetat per la puntualitat)
-        if new_delay > 1.0: 
-            reward -= (new_delay * 0.5) # Com més tard, més mal fa (-0.5 per minut)
+        if self.current_speed > 5.0: reward += 0.5 
+        elif not self.is_waiting: reward -= 4.0 # Càstig fort per estar parat
 
-        # 4. Recompensa per recuperar temps (Reforç positiu)
+        if new_delay > 1.0: reward -= (new_delay * 0.5) 
+
         prev_delay = getattr(self, 'last_known_delay', new_delay)
-        if new_delay < prev_delay:
-            reward += 1.0 # Premi per retallar el retard
-        
+        if new_delay < prev_delay: reward += 1.0
         self.last_known_delay = new_delay
 
-        # 5. Arribada a estació
         if self.distance_covered >= self.total_distance:
-            # Jackpot si arriba puntual
             if abs(new_delay) <= 2: reward += 100 
             else: reward += 10 - min(50, abs(new_delay) * 2)
             self.arrive_at_station_logic()
         
         self.last_dist_leader = dist_leader
-        
         try:
-            new_state = None
             if not self.finished:
-                new_dist_l = self.get_vision_ahead()
-                new_pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
-                new_dist_o = TrafficManager.check_head_on_collision(self.current_edge, new_pct)
-                new_state = self._get_general_state(new_dist_l, new_dist_o)
-
-            self.agent.update(state, action_idx, reward, new_state)
-        except Exception as e:
-            print(f"Error actualitzant Agent: {e}")
+                # Recàlcul estat (simplificat)
+                ns = self._get_general_state(self.get_vision_ahead(), TrafficManager.check_head_on_collision(self.current_edge, self.distance_covered/self.total_distance))
+                self.agent.update(state, action_idx, reward, ns)
+        except: pass
 
     def attempt_track_switch(self):
-        """Intenta cambiar a la vía paralela SOLO si hay un motivo válido."""
-        if not self.current_edge: return
+        """
+        Intenta canviar a la via paral·lela.
+        Retorna True si ha canviat, False si no ha pogut (perquè l'update sàpiga què fer).
+        """
+        if not self.current_edge: return False
 
-        #NOMÉS POT CANVIAR DE VIA A 200 METRES DE LESTACIO APROX ON HI HA EL CANVI D'AGULLES
-        if self.distance_covered > 0.2:
-            return
+        # 1. RESTRICCIÓ FÍSICA: Només a la sortida de l'estació (Zona d'agulles)
+        # Si ja hem passat 300 metres (0.3 km), estem encarrilats i no podem canviar.
+        if self.distance_covered > 0.3:
+            return False
 
-        # VERIFICACIÓN PREVIA: ¿Hay razón para cambiar de vía?
+        # 2. VERIFICACIÓ: Hi ha raó per canviar?
         dist_leader = self.get_vision_ahead()
         pct_current = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
         dist_oncoming = TrafficManager.check_head_on_collision(self.current_edge, pct_current)
         
-        # Solo cambiar si hay un obstáculo real:
-        # - Líder cerca (<3 km) que nos ralentiza
-        # - Tren de frente cercano (<5 km) que requiere maniobra
         has_valid_reason = (dist_leader < 3.0) or (dist_oncoming < 5.0)
-        
         if not has_valid_reason:
-            return  # No cambiar de vía sin motivo
+            return False  # No canviem sense motiu
 
+        # 3. INTENT DE CANVI
         current_track = self.current_edge.track_id
         target_track = 1 if current_track == 0 else 0
-        
-        # Solicitamos la vía paralela (track_id inverso)
         new_edge = TrafficManager.get_edge(self.node.name, self.target.name, target_track)
         
         if new_edge:
-            # Calculamos el progreso actual para mantenerlo
             pct = self.distance_covered / self.total_distance if self.total_distance > 0 else 0
-            
-            # CRÍTICO: Verificamos que la nueva vía no tenga un tren viniendo de cara
-            # Debe mirar la MISMA VÍA FÍSICA (mismo track_id) en sentido contrario
             dist_enemy = TrafficManager.check_head_on_collision(new_edge, pct)
             
-            # Solo cambiamos si hay un margen de seguridad suficiente
-            if dist_enemy > 3.0:  # Aumentado a 3 km para mayor seguridad
-                # 1. Quitamos el tren de la vía actual
+            # Marge de seguretat
+            if dist_enemy > 3.0: 
                 TrafficManager.remove_train_from_edge(self.current_edge, self.id)
-                
-                # 2. Actualizamos las referencias físicas del tren
                 self.current_edge = new_edge
                 self.max_speed_edge = new_edge.max_speed_kmh
-                # La distancia cubierta 'distance_covered' se mantiene igual (teletransporte lateral)
-                
-                # 3. Registramos el tren en la nueva vía
                 TrafficManager.update_train_position(self.current_edge, self.id, pct)
+                return True # Èxit
+
+        return False # Ha fallat
+        ç
     def arrive_at_station_logic(self):
         """Lògica d'arribada: Aturar tren, registrar temps i iniciar espera."""
         self.current_speed = 0.0 

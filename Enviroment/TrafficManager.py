@@ -27,7 +27,7 @@ class TrafficManager:
     _physical_segments = {}        # {(node_u_name, node_v_name): EdgeObject}
     
     # === CONFIGURACIÓ ===
-    SPAWN_INTERVAL = 9    
+    SPAWN_INTERVAL = 40    
     RESET_INTERVAL = 210   
     CHAOS_INTERVAL = 60    
 
