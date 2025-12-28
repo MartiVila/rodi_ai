@@ -409,8 +409,17 @@ class Train:
 
         # --- FASE 6: APRENENTATGE ---
         new_delay = self.calculate_delay()
-        reward = -1.0 + self.atp_penalty 
         
+        # [MODIFICACIÓ] Base reward
+        reward = -0.1 + self.atp_penalty  # Reduïm la penalització base de -1.0 a -0.1 perquè no es desesperi 
+        
+        if self.current_speed > 5.0:
+            # Recompensa positiva per estar en moviment (Incentiu vital)
+            reward += 0.5 
+        elif not self.is_waiting:
+            # Penalització FORTA per estar parat a la via (més dolorós que arriscar-se)
+            reward -= 2.0
+
         if abs(new_delay) > 2: reward -= 0.5 
         
         # PENALIZACIÓN FUERTE por cambio de vía innecesario
