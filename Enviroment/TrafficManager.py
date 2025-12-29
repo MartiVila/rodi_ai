@@ -419,7 +419,14 @@ class TrafficManager:
             edge = TrafficManager.get_edge(u_name, v_name, t_id)
             if not edge: continue # Si no existe (ej. tramo de vía única), pasamos
             
-            # 2. Comprobamos PELIGRO FRONTAL (Tren viniendo de cara)
+            # 2. Ignorar si la vía está marcada como OBSTACLE
+            try:
+                if edge.edge_type == EdgeType.OBSTACLE:
+                    continue
+            except Exception:
+                pass
+
+            # 3. Comprobamos PELIGRO FRONTAL (Tren viniendo de cara)
             # Simulamos que estamos al inicio (progress=0.0)
             dist_threat = TrafficManager.check_head_on_collision(edge, 0.0)
             

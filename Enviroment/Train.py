@@ -3,6 +3,7 @@ import math
 import random
 from Enviroment.Datas import Datas
 from Enviroment.TrafficManager import TrafficManager 
+from Enviroment.EdgeType import EdgeType
 
 class Train:
     """
@@ -80,12 +81,29 @@ class Train:
         elif getattr(self, 'current_edge', None):
              target_track = self.current_edge.track_id
 
-        # Obtenim l'objecte via
+        # Intentem la via preferida
         edge = TrafficManager.get_edge(self.node.name, self.target.name, target_track)
-        
-        # Fallback a via 0 si la preferida no existeix
+
+        # Si la via preferida és un obstacle, busquem una via segura
+        if edge and getattr(edge, 'edge_type', None) == EdgeType.OBSTACLE:
+            safe = TrafficManager.get_safe_track(self.node.name, self.target.name)
+            if safe is not None:
+                edge = TrafficManager.get_edge(self.node.name, self.target.name, safe)
+            else:
+                # Intentem qualsevol via que no sigui obstacle
+                other0 = TrafficManager.get_edge(self.node.name, self.target.name, 0)
+                other1 = TrafficManager.get_edge(self.node.name, self.target.name, 1)
+                edge = None
+                if other0 and getattr(other0, 'edge_type', None) != EdgeType.OBSTACLE:
+                    edge = other0
+                elif other1 and getattr(other1, 'edge_type', None) != EdgeType.OBSTACLE:
+                    edge = other1
+
+        # Fallback a via 0 si no hi ha elecció i no és obstacle
         if not edge:
             edge = TrafficManager.get_edge(self.node.name, self.target.name, 0)
+            if edge and getattr(edge, 'edge_type', None) == EdgeType.OBSTACLE:
+                edge = None
 
         if edge:
             self.current_edge = edge
