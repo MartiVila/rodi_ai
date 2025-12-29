@@ -124,6 +124,7 @@ class RodaliesTraining:
         #brain_filename = f"q_table_{safe_label}.pkl"
         brain_filename = f"q_table.pkl"
         brain_path = os.path.join(self.BRAINS_DIR, brain_filename)
+        brain_json_path = os.path.join(self.BRAINS_DIR, "q_table.json")
 
         # 1. Inicialitzem el Manager (Mode Training = True -> Sense gràfics pesats)
         manager = TrafficManager(width=1000, height=1000, is_training=True)
@@ -216,9 +217,11 @@ class RodaliesTraining:
 
             if day % self.SAVE_INTERVAL == 0:
                 manager.brain.save_table(brain_path)
+                manager.brain.export_qtable_to_json(brain_json_path)
 
         # Guardat final en acabar l'experiment
         manager.brain.save_table(brain_path)
+        manager.brain.export_qtable_to_json(brain_json_path)
 
         self._save_complete_csv(manager.completed_train_logs, params)
         return history_avg_delay, manager.completed_train_logs, manager

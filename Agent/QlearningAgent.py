@@ -2,6 +2,7 @@ import random
 import numpy as np
 import pickle  
 import os      
+import json
 from collections import defaultdict
 from Enviroment.Datas import Datas
 
@@ -105,6 +106,46 @@ class QLearningAgent:
         else:
             print(f"[Agent] No s'ha trobat '{filename}'. S'inicia amb Q-Table buida.")
             self.q = defaultdict(float)
+
+    def export_qtable_to_json(self, filename="Agent/Qtables/q_table.json"):
+        """
+        Exporta la Q-Table a format JSON per a anàlisi i visualització.
+        
+        Les claus (state, action) es converteixen a strings per compatibilitat JSON.
+        
+        :param filename: Nom del fitxer JSON on es guardarà la Q-Table
+        """
+        try:
+            # Assegurem que el directori existeix
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            
+            # Convertim la Q-Table a un format JSON-serializable
+            # Les claus são tuples (state, action), les convertim a strings
+            json_data = {
+                "metadata": {
+                    "total_entries": len(self.q),
+                    "learned_entries": len([v for v in self.q.values() if v != 0]),
+                    "alpha": self.alpha,
+                    "gamma": self.gamma,
+                    "epsilon": self.epsilon
+                },
+                "q_table": {}
+            }
+            
+            # Convertim cada entrada de la Q-Table
+            for (state, action), value in self.q.items():
+                # Convertim la clau tupla a string per compatibilitat JSON
+                key = f"{state}|{action}"
+                json_data["q_table"][key] = float(value)
+            
+            # Guardem a JSON
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"[Agent] Q-Table exportada a JSON correctament a '{filename}'. "
+                f"Entrades: {len(self.q)}")
+        except Exception as e:
+            print(f"[Error] No s'ha pogut exportar la Q-Table a JSON: {e}")
 
     #------------------------------------DEBUG-------------------------------------------
 
