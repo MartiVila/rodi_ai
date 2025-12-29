@@ -108,26 +108,52 @@ class RodaliesAI:
                         self.manager.brain.debug_qtable_stats()
 
     def _draw(self):
+        # Importem l'Enum aquí per poder comprovar el tipus d'aresta (OBSTACLE vs NORMAL)
+        from Enviroment.EdgeType import EdgeType
+
         self.screen.fill((240, 240, 240)) 
         
-        # --- CANVI AQUÍ: Dibuixem només una aresta per via física ---
-        drawn_segments = set()
+        # -------------------------------------------------------------
+        # 1. AGRUPACIÓ DE VIES FÍSIQUES
+        # Agrupem les direccions (A->B i B->A) per saber si alguna està trencada.
+        # -------------------------------------------------------------
+        segment_groups = {}
 
         for e in self.manager.all_edges:
             # Creem un ID únic per al tram físic, independent de la direcció
-            # Ordenem els noms dels nodes perquè A->B i B->A tinguin el mateix ID
             n1_name = e.node1.name
             n2_name = e.node2.name
+            
+            # Ordenem els noms perquè (Sant Pol, Calella) i (Calella, Sant Pol) siguin el mateix
             sorted_pair = tuple(sorted((n1_name, n2_name)))
             
-            # La clau és (NodeA, NodeB, ID_Via)
+            # La clau identifica el tros de metall específic (Tram + ID de via)
             segment_id = (sorted_pair, e.track_id)
 
-            if segment_id not in drawn_segments:
-                e.draw(self.screen)
-                drawn_segments.add(segment_id)
+            if segment_id not in segment_groups:
+                segment_groups[segment_id] = []
+            segment_groups[segment_id].append(e)
+
         # -------------------------------------------------------------
+        # 2. DIBUIX INTEL·LIGENT (PRIORITZANT OBSTACLES)
+        # -------------------------------------------------------------
+        for segment_id, edges in segment_groups.items():
+            # Per defecte, agafem la primera via que trobem (probablement NORMAL/Gris)
+            edge_to_draw = edges[0]
             
+            # Recorrem TOTES les direccions d'aquest tram (anada i tornada)
+            # Si ALGUNA està marcada com OBSTACLE, la seleccionem per dibuixar-la.
+            for e in edges:
+                if e.edge_type == EdgeType.OBSTACLE:
+                    edge_to_draw = e  # Aquesta té color vermell definit al seu mètode .draw()
+                    break
+            
+            # Dibuixem l'aresta escollida (si n'hi ha una de vermella, serà la vermella)
+            edge_to_draw.draw(self.screen)
+            
+        # -------------------------------------------------------------
+        # 3. DIBUIX DE NODES, TRENS I HUD
+        # -------------------------------------------------------------
         for n in self.manager.nodes.values(): 
             n.draw(self.screen)
             

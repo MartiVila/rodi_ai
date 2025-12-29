@@ -27,9 +27,10 @@ class TrafficManager:
     _physical_segments = {}        # {(node_u_name, node_v_name): EdgeObject}
     
     # === CONFIGURACIÓ ===
-    SPAWN_INTERVAL = 40    
-    RESET_INTERVAL = 210   
-    CHAOS_INTERVAL = 60    
+    SPAWN_INTERVAL = 15    
+    #cada 2 hores rotaci'o de vies en obstacel
+    RESET_INTERVAL = 120   
+    CHAOS_INTERVAL = 120    
 
     def __init__(self, width=1400, height=900, is_training=False):
         self.is_training = is_training 
@@ -97,19 +98,37 @@ class TrafficManager:
                 self.active_trains.remove(t)
 
     def _handle_mechanics(self):
-        # Manteniment
+        # Manteniment (Reparació automàtica)
         if self.sim_time - self.last_reset > self.RESET_INTERVAL:
             self.last_reset = self.sim_time
             self.reset_network_status()
 
-        # Caos (Visual)
+        # Caos (Avaries Aleatòries) - ARA BIDIRECCIONAL
         if not self.is_training and (self.sim_time - self.last_chaos > self.CHAOS_INTERVAL):
             self.last_chaos = self.sim_time
+            
+            # Busquem vies que estiguin sanes (NORMAL)
             normals = [e for e in self.all_edges if e.edge_type == EdgeType.NORMAL]
-            if len(normals) > 2:
-                for e in random.sample(normals, 2):
-                    e.edge_type = EdgeType.OBSTACLE
-                    e.update_properties()
+            
+            if len(normals) > 0:
+                # Triem 1 segment aleatori per trencar
+                target_edge = random.choice(normals)
+                
+                # 1. Trenquem la direcció original (A -> B)
+                target_edge.edge_type = EdgeType.OBSTACLE
+                target_edge.update_properties()
+                TrafficManager.report_issue(target_edge.node1.name, target_edge.node2.name, target_edge.track_id)
+                
+                # 2. Trenquem la direcció inversa (B -> A) per coherència física
+                # Busquem la via que connecta els mateixos nodes al revés amb el MATEIX track_id
+                inverse_edge = TrafficManager.get_edge(target_edge.node2.name, target_edge.node1.name, target_edge.track_id)
+                
+                if inverse_edge:
+                    inverse_edge.edge_type = EdgeType.OBSTACLE
+                    inverse_edge.update_properties()
+                    TrafficManager.report_issue(inverse_edge.node1.name, inverse_edge.node2.name, inverse_edge.track_id)
+                    
+                print(f"[CAOS] Avaria a la via {target_edge.node1.name}-{target_edge.node2.name} (Via {target_edge.track_id})")
 
     def reset_network_status(self):
         for e in self.all_edges: 

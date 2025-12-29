@@ -12,31 +12,29 @@ class QLearningAgent:
         self.gamma = gamma
         self.epsilon = epsilon
 
-
     def decay_epsilon(self, decay_rate=0.99, min_epsilon=0.01):
         """
         Redueix epsilon multiplicant-lo pel decay_rate, fins a un mínim.
-        Això fa l'agent menys aleatori (més conservador) amb el temps.
+        Amb aquesta funció permetem que l'agent sigui més conservador a mesur que va avanaçant el temps.
         """
         self.epsilon = max(min_epsilon, self.epsilon * decay_rate)
         
     def discretize_diff(self, diff):
-        # Discretització fina per distingir petites desviacions
+        #Discretitzem la diferència de temps en 5 estats
         if diff < -1:
-            return -2  # Molt avançat
+            return -2  #molt avançat
         elif diff == -1:
-            return -1  # Lleugerament avançat
+            return -1  #lleugermaent avançat
         elif diff == 0:
-            return 0   # Perfecte (a temps)
+            return 0   #puntual
         elif diff == 1:
-            return 1   # Lleugerament retardat
+            return 1   #lleugerament retardat
         else:  # diff > 1
-            return 2   # Molt retardat
+            return 2   #molt retardat
 
     def get_segment_id(self, origin, destination):
         """
-        Genera un ID únic per al tram (per a la Q-Table).
-        Exemple: "BARCELONA-SANTS->PLACA DE CATALUNYA"
+        genera un id unic per a cada tram de via, és a dir cada secció entre dues estacions
         """
         return f"{origin}->{destination}"
     
@@ -107,7 +105,6 @@ class QLearningAgent:
         else:
             print(f"[Agent] No s'ha trobat '{filename}'. S'inicia amb Q-Table buida.")
             self.q = defaultdict(float)
-
 
     #------------------------------------DEBUG-------------------------------------------
 
