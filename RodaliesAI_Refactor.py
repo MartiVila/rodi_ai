@@ -5,28 +5,18 @@ from Enviroment.TrafficManager import TrafficManager
 
 class RodaliesAI:
     """
-    Classe principal de l'aplicació (Main Entry Point).
+    Classe principal de l'aplicació.
     
     Responsabilitats:
     1. Inicialitzar el motor gràfic (Pygame).
     2. Instanciar el gestor de la simulació (TrafficManager).
-    3. Gestionar el bucle principal (Input -> Update -> Render).
+    3. Gestionar el bucle principal (Input, Update, Render).
     4. Gestionar el temps de simulació vs temps real.
     """
 
     # Configuració global de la simulació
     TIME_SCALE = 5.0  # Factor de temps: 1 segon real = 10 minuts simulats
-    FPS = 60           # Frames per segon objectiu
-
-    """
-    ############################################################################################
-    ############################################################################################
-
-    Inicialització del Sistema i Gestor de Trànsit
-
-    ############################################################################################
-    ############################################################################################
-    """
+    FPS = 60
 
     def __init__(self):
         """
@@ -38,30 +28,17 @@ class RodaliesAI:
         # Configuració de la finestra
         self.width, self.height = 1400, 900
         self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Rodalies AI - Simulation View")
+        pygame.display.set_caption("RODI AI - Simulació")
         
         self.clock = pygame.time.Clock()
         self.running = True
 
-        # === INSTANCIACIÓ DEL GESTOR DE TRÀNSIT (MODEL) ===
         # El TrafficManager s'encarrega de carregar CSVs, crear nodes, 
         # vies i gestionar la lògica dels trens.
         self.manager = TrafficManager(self.width, self.height)
         
-        print("Sistema iniciat. Control delegat a TrafficManager.")
+        print("Sistema iniciat, control delegat a TrafficManager.")
 
-    """
-    ############################################################################################
-    ############################################################################################
-
-    Bucle Principal (Main Loop)
-     - Gestió de Temps
-     - Input d'Usuari
-     - Actualització i Dibuix
-
-    ############################################################################################
-    ############################################################################################
-    """
 
     def run(self):
         """
@@ -76,14 +53,14 @@ class RodaliesAI:
                 dt_real_seconds = dt_ms / 1000.0          
                 dt_sim_minutes = dt_real_seconds * self.TIME_SCALE 
 
-                # 2. GESTIÓ D'INPUTS (CONTROLLER)
+                # 2. GESTIÓ D'INPUTS
                 self._handle_input()
 
-                # 3. ACTUALITZACIÓ DE LÒGICA (MODEL)
+                # 3. ACTUALITZACIÓ DE LÒGICA
                 # Deleguem al manager l'avanç de l'estat del món
                 self.manager.update(dt_sim_minutes)
 
-                # 4. VISUALITZACIÓ (VIEW)
+                # 4. VISUALITZACIÓ
                 self._draw()
 
         except Exception as e:
@@ -93,6 +70,7 @@ class RodaliesAI:
         finally:
             self._cleanup()
 
+    #Funció per poder fer debug manual
     def _handle_input(self):
         """Processa els esdeveniments de teclat i ratolí de Pygame."""
         for event in pygame.event.get():
@@ -113,10 +91,7 @@ class RodaliesAI:
 
         self.screen.fill((240, 240, 240)) 
         
-        # -------------------------------------------------------------
-        # 1. AGRUPACIÓ DE VIES FÍSIQUES
         # Agrupem les direccions (A->B i B->A) per saber si alguna està trencada.
-        # -------------------------------------------------------------
         segment_groups = {}
 
         for e in self.manager.all_edges:
@@ -127,33 +102,30 @@ class RodaliesAI:
             # Ordenem els noms perquè (Sant Pol, Calella) i (Calella, Sant Pol) siguin el mateix
             sorted_pair = tuple(sorted((n1_name, n2_name)))
             
-            # La clau identifica el tros de metall específic (Tram + ID de via)
+            # La clau identifica Tram + ID de via
             segment_id = (sorted_pair, e.track_id)
 
             if segment_id not in segment_groups:
                 segment_groups[segment_id] = []
             segment_groups[segment_id].append(e)
 
-        # -------------------------------------------------------------
-        # 2. DIBUIX INTEL·LIGENT (PRIORITZANT OBSTACLES)
-        # -------------------------------------------------------------
+
         for segment_id, edges in segment_groups.items():
-            # Per defecte, agafem la primera via que trobem (probablement NORMAL/Gris)
+            # Per defecte, agafem la primera via que trobem (probablement normal)
             edge_to_draw = edges[0]
             
-            # Recorrem TOTES les direccions d'aquest tram (anada i tornada)
-            # Si ALGUNA està marcada com OBSTACLE, la seleccionem per dibuixar-la.
+            # Recorrem totes les direccions d'aquest tram (anada i tornada)
+            # Si alguna està marcada com obstacle, la seleccionem per dibuixar-la.
             for e in edges:
                 if e.edge_type == EdgeType.OBSTACLE:
                     edge_to_draw = e  # Aquesta té color vermell definit al seu mètode .draw()
                     break
             
-            # Dibuixem l'aresta escollida (si n'hi ha una de vermella, serà la vermella)
+            # Dibuixem l'aresta escollida
             edge_to_draw.draw(self.screen)
             
-        # -------------------------------------------------------------
-        # 3. DIBUIX DE NODES, TRENS I HUD
-        # -------------------------------------------------------------
+
+        # Dibuixem els nodes i trens per sobre de les vies
         for n in self.manager.nodes.values(): 
             n.draw(self.screen)
             
@@ -174,18 +146,9 @@ class RodaliesAI:
         pygame.quit()
         sys.exit()
 
-    """
-    ############################################################################################
-    ############################################################################################
-
-    Funcions Auxiliars de la Interfície (HUD)
-
-    ############################################################################################
-    ############################################################################################
-    """
 
     def _draw_hud(self):
-        """Dibuixa la informació de text (Heads-Up Display) sobre la simulació."""
+        """Dibuixa la informació de text (HUD) sobre la simulació."""
         debug_font = pygame.font.SysFont("Arial", 16)
         
         # Dades del model
@@ -199,6 +162,12 @@ class RodaliesAI:
         
         time_str = f"Dia {days} | {hours:02d}:{mins:02d}"
         info_str = f"{time_str} | Trens actius: {num_trains} | Scale: x{self.TIME_SCALE}"
+
+        #Mostrar llegenda al HUD
+        llegenda_vies = " Vies: Verd=NORMAL, Vermell=OBSTACLE"
+        llegenda_trens = " Trens: Blau=Avançat, Vermell=Retardat, Verd=Dins Horari, Groc=Aturat"
+        info_str += llegenda_vies + llegenda_trens
+
         
         msg = debug_font.render(info_str, True, (0, 0, 0))
         

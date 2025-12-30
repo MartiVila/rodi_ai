@@ -21,19 +21,21 @@ class TrafficManager:
     Classe central del Model (MVC). Actua com a 'Singleton' de facto.
     """
     
-    # === ESTAT COMPARTIT (Shared Memory) ===
-    _reported_obstacles = {}       # {(node_u, node_v, track_id): "ALERT"}
-    _train_positions = {}          # {Edge: [(train_id, progress), ...]}
-    _physical_segments = {}        # {(node_u_name, node_v_name): EdgeObject}
+    # Estat compartit
+    _reported_obstacles = {}
+    _train_positions = {}
+    _physical_segments = {}
     
-    # === CONFIGURACIÓ ===
+    # Configuració
     SPAWN_INTERVAL = 15    
-    #cada 2 hores rotaci'o de vies en obstacel
+    #cada 2 hores rotació de vies en obstacle
     RESET_INTERVAL = 120   
     CHAOS_INTERVAL = 120    
 
     def __init__(self, width=1400, height=900, is_training=False):
-        self.is_training = is_training 
+        self.is_training = is_training
+
+        #Esta hardcoded, es podria calcular segons la mida de la pantalla
         self.width = width
         self.height = height
 
@@ -50,7 +52,7 @@ class TrafficManager:
         
         self.current_spawn_line = 'R1_NORD' 
 
-        # === CERVELL (Agent Compartit) ===
+        # Cervell
         self.brain = QLearningAgent(
             alpha=DEFAULT_AGENT_PARAMS[0], 
             gamma=DEFAULT_AGENT_PARAMS[1], 
@@ -59,16 +61,14 @@ class TrafficManager:
         try:
             self.brain.load_table("Agent/Qtables/q_table.pkl")
             if not self.is_training:
-                print("[TrafficManager] Cervell (Q-Table) carregat correctament.")
+                print("(TrafficManager) Cervell (Q-Table) carregat correctament.")
         except Exception:
-            print("[TrafficManager] ALERTA: No s'ha trobat taula prèvia. Iniciant des de zero.")
+            print("(TrafficManager) No s'ha trobat taula prèvia. Iniciant des de zero.")
 
         self._load_network()
 
-    # ############################################################################################
-    # Bucle Principal
-    # ############################################################################################
 
+    #Bucle principal
     def update(self, dt_minutes):
         self.sim_time += dt_minutes
         self._handle_mechanics()
@@ -76,7 +76,8 @@ class TrafficManager:
         # SPAWN
         if self.sim_time - self.last_spawn > self.SPAWN_INTERVAL:
             self.last_spawn = self.sim_time
-            
+
+            # Decidim línia segons mode         
             if self.is_training:
                 line_anada = self.current_spawn_line
                 line_tornada = f"{self.current_spawn_line}_SUD"
@@ -84,14 +85,16 @@ class TrafficManager:
                 line_anada = 'R1_NORD'
                 line_tornada = 'R1_SUD'
 
+            # Spawn trens
             self.spawn_line_train(line_anada)
             if line_tornada in self.lines:
                 self.spawn_line_train(line_tornada)
 
-        # UPDATE TRENS
+        # Update trens actius
         for t in self.active_trains[:]:
             t.update(dt_minutes)
             
+            # Si acaba el tren, eliminem-lo
             if t.finished:
                 self._archive_train_log(t)
                 self.remove_train(t.id) 
@@ -103,7 +106,7 @@ class TrafficManager:
             self.last_reset = self.sim_time
             self.reset_network_status()
 
-        # Caos (Avaries Aleatòries) - ARA BIDIRECCIONAL
+        # Caos avaries aleatòries
         if not self.is_training and (self.sim_time - self.last_chaos > self.CHAOS_INTERVAL):
             self.last_chaos = self.sim_time
             
@@ -114,13 +117,13 @@ class TrafficManager:
                 # Triem 1 segment aleatori per trencar
                 target_edge = random.choice(normals)
                 
-                # 1. Trenquem la direcció original (A -> B)
+                # Trenquem la direcció original (A -> B)
                 target_edge.edge_type = EdgeType.OBSTACLE
                 target_edge.update_properties()
                 TrafficManager.report_issue(target_edge.node1.name, target_edge.node2.name, target_edge.track_id)
                 
-                # 2. Trenquem la direcció inversa (B -> A) per coherència física
-                # Busquem la via que connecta els mateixos nodes al revés amb el MATEIX track_id
+                # Trenquem la direcció inversa (B -> A)
+                # Busquem la via que connecta els mateixos nodes al revés amb el mateix track_id
                 inverse_edge = TrafficManager.get_edge(target_edge.node2.name, target_edge.node1.name, target_edge.track_id)
                 
                 if inverse_edge:
@@ -128,17 +131,15 @@ class TrafficManager:
                     inverse_edge.update_properties()
                     TrafficManager.report_issue(inverse_edge.node1.name, inverse_edge.node2.name, inverse_edge.track_id)
                     
-                print(f"[CAOS] Avaria a la via {target_edge.node1.name}-{target_edge.node2.name} (Via {target_edge.track_id})")
-
+                print(f"(CAOS) Avaria a la via {target_edge.node1.name}-{target_edge.node2.name} (Via {target_edge.track_id})")
+    
+    # Reset cada 2 hores
     def reset_network_status(self):
         for e in self.all_edges: 
             e.edge_type = EdgeType.NORMAL
             e.update_properties()
         TrafficManager._reported_obstacles.clear()
 
-    # ############################################################################################
-    # Gestió de Trens
-    # ############################################################################################
 
     def spawn_line_train(self, line_name):
         from Enviroment.Train import Train 
@@ -152,13 +153,9 @@ class TrafficManager:
             if name_norm in self.nodes:
                 route_nodes.append(self.nodes[name_norm])
         
-        # [MODIFICACIÓ] Decidim la via inicial segons el nom de la línia
-        # R1_NORD -> Via 0
-        # R1_SUD  -> Via 1
         starting_track = 1 if "SUD" in line_name else 0
 
         if len(route_nodes) > 1:
-            # === SAFETY CHECK: OCUPACIÓ DE VIA ===
             # Evitem fer spawn si la via de sortida està ocupada per prevenir xocs immediats.
             start_node_name = route_nodes[0].name
             next_node_name = route_nodes[1].name
@@ -166,7 +163,7 @@ class TrafficManager:
             start_edge = TrafficManager.get_edge(start_node_name, next_node_name, starting_track)
             
             if start_edge:
-                # 1. Comprovem congestió al davant (Trens en el mateix sentit)
+                # Comprovem congestió al davant
                 trains_on_edge = TrafficManager._train_positions.get(start_edge, [])
                 if trains_on_edge:
                     # La llista està ordenada per progrés (més avançat primer). 
@@ -175,15 +172,13 @@ class TrafficManager:
                     
                     # Si l'últim tren està a menys del 5% del tram, no sortim encara.
                     if last_progress < 0.05:
-                        # print(f"[Spawn Bloquejat] Via ocupada a {start_node_name} per tren sortint.")
                         return 
 
-                # 2. Comprovem col·lisió frontal (Trens venint de cara en la mateixa via física)
+                # 2. Comprovem col·lisió frontal
                 dist_threat = TrafficManager.check_head_on_collision(start_edge, 0.0)
                 if dist_threat < 3.0: # Si ve un tren de cara a menys de 3km
-                    # print(f"[Spawn Bloquejat] Tren arribant de cara a {start_node_name}.")
+                    # No fem spawn per evitar col·lisió immediata
                     return
-            # =====================================
 
             schedule = self.calculate_schedule(route_nodes, self.sim_time)
             
@@ -193,17 +188,17 @@ class TrafficManager:
                 schedule=schedule, 
                 start_time_sim=self.sim_time, 
                 is_training=self.is_training,
-                prefered_track=starting_track # <--- AFEGIM AQUEST ARGUMENT
+                prefered_track=starting_track
             )
             
             self.active_trains.append(new_train)
             if not self.is_training:
-                # Opcional: Afegim info al print per debug
-                print(f"[Spawn] Tren {new_train.id} sortint de {route_nodes[0].name} (Via {starting_track})")
+                # Print per debug
+                print(f"(Spawn) Tren {new_train.id} sortint de {route_nodes[0].name} (Via {starting_track})")
 
     def calculate_schedule(self, route_nodes, start_time):
         """
-        Genera l'horari basant-se en els temps OFICIALS de Renfe (Datas.py).
+        Genera l'horari basant-se en els temps oficials de Renfe (Datas.py).
         Això elimina els càlculs físics erronis i posa objectius reals.
         """
         schedule = {}
@@ -217,12 +212,11 @@ class TrafficManager:
             u_name = route_nodes[i].name
             v_name = route_nodes[i+1].name
             
-            # 1. Obtenim el temps REAL de l'horari (PDF)
+            # Obtenim el temps real de l'horari
             official_travel_time = Datas.get_travel_time(u_name, v_name)
             
-            # 2. Afegim l'aturada tècnica (els horaris ja solen incloure part d'això,
+            # Afegim l'aturada tècnica (els horaris ja solen incloure part d'això,
             # però per la IA li donem el temps de viatge + parada)
-            # Nota: Al PDF, el temps és d'arribada a arribada aprox.
             # Aquí sumem: Temps Viatge + Parada Estació.
             current_time += official_travel_time + Datas.STOP_STA_TIME
             
@@ -239,12 +233,9 @@ class TrafficManager:
         }
         self.completed_train_logs.append(log_entry)
 
-    # ############################################################################################
-    # Càrrega de Dades (CSV)
-    # ############################################################################################
-
+    #Carregar de dades externes
     def _load_network(self):
-        print("[TrafficManager] Carregant xarxa ferroviària...")
+        print("(TrafficManager) Carregant xarxa ferroviària...")
         
         wanted_stations = set()
         for s1, s2 in Datas.R1_CONNECTIONS:
@@ -256,7 +247,7 @@ class TrafficManager:
             df = pd.read_csv(csv_path, sep=';', encoding='latin1', skipinitialspace=True)
             df.columns = [c.strip().upper() for c in df.columns]
         except Exception as e:
-            print(f"[Error CRÍTIC] No s'ha pogut llegir {csv_path}: {e}")
+            print(f"Error: no es pot llegir {csv_path}: {e}")
             return
 
         lats, lons, temp_st = [], [], []
@@ -280,7 +271,7 @@ class TrafficManager:
                 lons.append(lon)
 
         if not lats: 
-            print("[Error] No s'han trobat estacions vàlides.")
+            print("Error: No s'han trobat estacions vàlides.")
             return
 
         min_lat, max_lat = min(lats), max(lats)
@@ -305,8 +296,9 @@ class TrafficManager:
         self.lines['R1_NORD'] = Datas.R1_STA
         self.lines['R1_SUD'] = Datas.R1_STA[::-1]
         
-        print(f"[TrafficManager] Xarxa construïda: {len(self.nodes)} estacions, {len(self.all_edges)} vies.")
+        print(f"(TrafficManager) Xarxa construïda: {len(self.nodes)} estacions, {len(self.all_edges)} vies.")
 
+    # Afegir connexió bidireccional entre dos nodes
     def _add_connection(self, s1, s2):
         n1, n2 = self._normalize_name(s1), self._normalize_name(s2)
         
@@ -359,9 +351,7 @@ class TrafficManager:
             return float(min(hits, key=lambda x: abs(x - target))) if hits else None
         except: return None
 
-    # ############################################################################################
-    # Mètodes Estàtics (Interfície Pública per Agents)
-    # ############################################################################################
+    # Metodes estàtics per a la gestió global de trens i vies
 
     @staticmethod
     def remove_train_from_edge(edge, train_id):
@@ -381,38 +371,31 @@ class TrafficManager:
     @staticmethod
     def check_head_on_collision(my_edge, my_progress):
         """
-        Versió ARREGLADA (Safe Version).
-        Comprova si ve un tren de cara a la MATEIXA VIA FÍSICA (mateix track_id).
+        Comprova si ve un tren de cara a la mateixa vía física (mateix track_id).
         Retorna: Distància en km (float). Si és segur, retorna float('inf').
-        
-        IMPORTANT: Para detectar colisiones frontales, debemos buscar trenes
-        que vienen en SENTIDO CONTRARIO pero por la MISMA VÍA FÍSICA (track_id).
         """
-        # 1. Validacions bàsiques per evitar errors
+        # Validacions bàsiques per evitar errors
         if not my_edge: return float('inf')
         
-        # 2. Busquem la via inversa (el mateix segment físic però en sentit contrari)
+        # Busquem la via inversa (el mateix segment físic però en sentit contrari)
         u_name, v_name = my_edge.node1.name, my_edge.node2.name
         
-        # CORRECCIÓN CRÍTICA: El track_id ha de ser el mateix per ser un perill "Frontal"
-        # En la representación actual:
-        # - Track 0 en dirección U->V corresponde a Track 0 en dirección V->U
-        # - Track 1 en dirección U->V corresponde a Track 1 en dirección V->U
-        # Son la MISMA vía física, solo que en sentido contrario
+        # En la representació actual:
+        # - Track 0 en direcció U->V correspon a Track 0 en direcció V->U
+        # - Track 1 en direcció U->V correspon a Track 1 en direcció V->U
         inverse_edge = TrafficManager.get_edge(v_name, u_name, my_edge.track_id)
         
-        # Si la via inversa no existeix, és segur
         if not inverse_edge: 
             return float('inf')
             
-        # 3. Accés segur al diccionari de posicions (sense bucles)
+        # Accés al diccionari de posicions
         trains_inverse = TrafficManager._train_positions.get(inverse_edge)
         
         # Si no hi ha llista o està buida, no hi ha perill
         if not trains_inverse:
             return float('inf')
 
-        # 4. Càlcul de col·lisió directe (Sense iterar)
+        # Càlcul de col·lisió directe (Sense iterar)
         # trains_inverse està ordenada per progrés descendent: el [0] és el més avançat
         # i per tant l'únic que ens pot xocar de cara primer.
         enemy_id, enemy_prog = trains_inverse[0] 
@@ -432,46 +415,46 @@ class TrafficManager:
     @staticmethod
     def get_safe_track(u_name, v_name):
         """
-        Busca una vía libre (0 o 1) para ir de u_name a v_name.
-        Retorna el track_id seguro o None si todas están ocupadas/peligrosas.
+        Busca una vía lliure (0 o 1) per anar de u_name a v_name.
+        Retorna el track_id segur o None si totes estan ocupades/peligroses.
         """
-        # Probamos las dos posibles vías (0 y 1)
+        # Probem les dues vies disponibles
         possible_tracks = [0, 1]
         
-        # Opcional: Si quieres priorizar la vía 1 para adelantamientos, cambia el orden
-        # possible_tracks = [0, 1] 
+
+        # possible_tracks = [0, 1]
         
         for t_id in possible_tracks:
-            # 1. Obtenemos el objeto vía candidato
+            # Obtenim l'objecte via candidat
             edge = TrafficManager.get_edge(u_name, v_name, t_id)
-            if not edge: continue # Si no existe (ej. tramo de vía única), pasamos
+            if not edge: continue # Si no existeix (tram de via única), passem
             
-            # 2. Ignorar si la vía está marcada como OBSTACLE
+            # Ignorar si la via està marcada com a OBSTACLE
             try:
                 if edge.edge_type == EdgeType.OBSTACLE:
                     continue
             except Exception:
                 pass
 
-            # 3. Comprobamos PELIGRO FRONTAL (Tren viniendo de cara)
-            # Simulamos que estamos al inicio (progress=0.0)
+            # Comprovem perill frontal (Tren venint de cara)
+            # Simulem que estem a l'inici (progress=0.0)
             dist_threat = TrafficManager.check_head_on_collision(edge, 0.0)
             
-            # Si la distancia es infinita (no hay nadie) o muy grande (>5km), es segura
+            # Si la distància és infinita (no hi ha ningú) o molt gran (>5km), és segura
             if dist_threat == float('inf') or dist_threat > 5.0:
                 
-                # 3. (Opcional) Comprobar congestión en el mismo sentido
-                # Para evitar entrar si hay un tren justo delante parado
+                # Comprovar congestió en el mateix sentit
+                # Per evitar entrar si hi ha un tren just davant parat
                 trains_same_dir = TrafficManager._train_positions.get(edge, [])
                 if trains_same_dir:
-                    last_train_id, last_prog = trains_same_dir[-1] # El último que entró
-                    # Si el último tren está a menos del 5% del recorrido, esperamos para no bloquear
+                    last_train_id, last_prog = trains_same_dir[-1] # L'últim que va entrar
+                    # Si l'últim tren està a menys del 5% del recorregut, esperem per no bloquejar
                     if last_prog < 0.05: 
                         continue 
 
-                return t_id # Encontramos una vía segura
+                return t_id # Via segura trobada
                  
-        return None # Ninguna vía es segura, hay que esperar
+        return None # Cap via és segura, esperar
     
     @staticmethod
     def report_issue(u_name, v_name, track_id):
@@ -532,13 +515,11 @@ class TrafficManager:
         dist_km = (leader_prog - my_prog) * edge.real_length_km
         return max(0.0, dist_km) # Mai retornar negatiu per error de float
 
-    # ==========================================
-    # UTILITATS I DEBUG
-    # ==========================================
 
     def save_brain(self):
         self.brain.save_table("Agent/Qtables/q_table.pkl")
 
+    # Mètodes de debug
     def debug_network_snapshot(self):
         print(f"\n=== SNAPSHOT XARXA (T={self.sim_time:.1f}) ===")
         print(f"Total Trens Actius: {len(self.active_trains)}")
