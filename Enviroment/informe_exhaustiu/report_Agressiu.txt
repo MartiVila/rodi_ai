@@ -1,0 +1,4 @@
+=== Agressiu ===
+Retard Final: 15.3423
+Total Dies: 4800
+Mida Q-Table: 362

@@ -185,12 +185,16 @@ class Train:
         else: diff_disc = 2            
         
         # 6. Riesgo Frontal - Usem el valor passat per paràmetre
+        # Si està a menys de 2 Km, tenim perill
+        # si tenim perill: danger_state = 1, sinó 0
         if dist_oncoming < 2.0: danger_state = 1 
         else: danger_state = 0                   
 
         # 7. Oportunidad de cambio de vía (SOLO SI HAY RAZÓN)
+        # Mirem: Si podem canviar i si hi ha motiu
         can_switch = 0
         if self.current_edge:
+            # Other edge és la via paral·lela
             other_track = 1 if self.current_edge.track_id == 0 else 0
             other_edge = TrafficManager.get_edge(self.node.name, self.target.name, other_track)
             

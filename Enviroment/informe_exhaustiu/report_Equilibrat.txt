@@ -1,0 +1,4 @@
+=== Equilibrat ===
+Retard Final: 2.0450
+Total Dies: 4800
+Mida Q-Table: 258
