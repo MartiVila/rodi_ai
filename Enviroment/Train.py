@@ -14,7 +14,7 @@ class Train:
     # --- Constants Físiques ---
     ACCELERATION = 120.0     # km/h per minut (Aprox 1.3 m/s^2)
     BRAKING = 200.0         # Frenada forta
-    MAX_SPEED_TRAIN = 140.0 # Velocitat màxima del material rodant
+    MAX_SPEED_TRAIN = 140.0 # Velocitat màxima dels trens
     BRAKING_DISTANCE_KM = 0.05 # Distància de seguretat per frenar davant estació
 
     def __init__(self, agent, route_nodes, schedule, start_time_sim, is_training=False, prefered_track=0):
