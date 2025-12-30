@@ -12,16 +12,16 @@ from Agent.QlearningAgent import QLearningAgent
 
 class RodaliesTraining:
     """
-    Classe encarregada de gestionar l'entrenament intensiu (Headless) del sistema.
+    Classe encarregada de gestionar l'entrenament intensiu. SENSE INTERFÍCIE GRÀFICA.
     
     Responsabilitats:
-    1. Executar simulacions sense renderitzat gràfic (molt més ràpid).
-    2. Gestionar el 'Grid Search' per trobar els millors hiperparàmetres.
+    1. Executar simulacions sense renderitzat gràfic.
+    2. Gestionar el 'Grid Search' per tal d'explorar diferents possibles situacions. 
     3. Implementar el sistema de 'Curriculum Learning' (dificultat progressiva).
     4. Generar informes i gràfics de rendiment.
     """
 
-    # === CONFIGURACIÓ DE L'EXPERIMENT ===
+    # === Parametres Globals ===
     OUTPUT_DIR = "Enviroment/informe_exhaustiu"
     PLOTS_DIR = "Agent/Plots_Exhaustius"
     BRAINS_DIR = "Agent/Qtables"
@@ -32,19 +32,13 @@ class RodaliesTraining:
 
     # Hiperparàmetres a provar
     HYPERPARAMS_GRID = [
-        # El decay és el percentatge que es conserva
+        # Percentatge en que es manté el epsilon (Si decay_epsilon == 0.8 es manté el 80% per iteració)
         {'alpha': 0.9,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Agressiu (a=0.9)'},
         {'alpha': 0.7,  'gamma': 0.99, 'epsilon_decay': 0.5,  'label': 'Equilibrat (a=0.7)'},
         {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'}
-    ]
-
-    """HYPERPARAMS_PERS_GRID = [
-        {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Personalitzat (a=0.01)'}
-    ]
-    """
-    HYPERPARAMS_PERS_GRID = [
         {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.95,  'label': 'Personalitzat (a=0.01)'}
     ]
+
     def __init__(self):
         """Inicialitza l'entorn de treball i crea els directoris necessaris."""
         os.makedirs(self.OUTPUT_DIR, exist_ok=True)
@@ -102,7 +96,7 @@ class RodaliesTraining:
     ############################################################################################
     ############################################################################################
 
-    Nucli de l'Experiment (Run Single Experiment)
+    Bucle d'Entrenament
 
     ############################################################################################
     ############################################################################################
@@ -199,7 +193,7 @@ class RodaliesTraining:
             daily_avg = np.mean(delays_in_step) if delays_in_step else 0
             history_avg_delay.append(daily_avg)
             
-            # E. DECAY DE L'EPSILON
+            # E. DECAY DE L'EPSILON - Percentatge en que es manté el epsilon (Si decay_epsilon == 0.8 es manté el 80% per iteració)
             # Reduïm l'aleatorietat cada 100 dies per estabilitzar l'aprenentatge
             if day % 100 == 0:
                 manager.brain.decay_epsilon(params['epsilon_decay'], min_epsilon=0.01)
@@ -357,14 +351,14 @@ class RodaliesTraining:
             smooth_data = data_series.rolling(window=200).mean()
             plt.plot(smooth_data, label=f"{params['label']}", linewidth=2)
 
-        history, logs, _ = self.run_experiment(self.HYPERPARAMS_PERS_GRID[0])
-        results[self.HYPERPARAMS_PERS_GRID[0]['label']] = history
+        history, logs, _ = self.run_experiment(self.HYPERPARAMS_GRID[3][0])
+        results[self.HYPERPARAMS_GRID[3]['label']] = history
 
-        self._save_report(logs, self.HYPERPARAMS_PERS_GRID[0], history)
+        self._save_report(logs, self.HYPERPARAMS_GRID[3], history)
 
         data_series = pd.Series(history)
         smooth_data = data_series.rolling(window=200).mean()
-        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_PERS_GRID[0]['label']}", linewidth=2)
+        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_GRID[3]['label']}", linewidth=2)
 
         # Dibuixem línies verticals per marcar el canvi de nivells del Curriculum
         # Necessitem saber quants nivells hi ha (assumim 6 segons _setup_curriculum)
@@ -399,14 +393,14 @@ class RodaliesTraining:
         plt.figure(figsize=(15, 10))
         
         # Configuracio personalitzada
-        history, logs, _ = self.run_experiment(self.HYPERPARAMS_PERS_GRID[0])
-        results[self.HYPERPARAMS_PERS_GRID[0]['label']] = history
+        history, logs, _ = self.run_experiment(self.HYPERPARAMS_GRID[3])
+        results[self.HYPERPARAMS_GRID[3]['label']] = history
 
-        self._save_report(logs, self.HYPERPARAMS_PERS_GRID[0], history)
+        self._save_report(logs, self.HYPERPARAMS_GRID[3], history)
 
         data_series = pd.Series(history)
         smooth_data = data_series.rolling(window=200).mean()
-        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_PERS_GRID[0]['label']}", linewidth=2)
+        plt.plot(smooth_data, label=f"{self.HYPERPARAMS_GRID[3]['label']}", linewidth=2)
 
         # Dibuixem línies verticals per marcar el canvi de nivells del Curriculum
         # Necessitem saber quants nivells hi ha (assumim 6 segons _setup_curriculum)
