@@ -57,7 +57,7 @@ class Train:
         self.wait_timer = 0.0      
         self.WAIT_TIME_MIN = Datas.STOP_STA_TIME   
         
-        # [MODIFICACIÓ] Memòria per calcular velocitat relativa (tendència)
+        # Memòria per calcular velocitat relativa (tendència)
         self.last_dist_leader = float('inf')
         #Penalty acumulatiu per ús excesiu de ATP
         #ATP ha de ser només en cas d'emergència
@@ -68,7 +68,7 @@ class Train:
 
     def setup_segment(self, preferred_track=None):
         """
-        Configura el tramo i REGISTRA IMMEDIATAMENT la posició per evitar Deadlocks.
+        Configura el tram i REGISTRA IMMEDIATAMENT la posició per evitar Deadlocks.
         """
         if not self.target:
             self.finished = True
@@ -111,7 +111,6 @@ class Train:
             self.max_speed_edge = edge.max_speed_kmh
             self.distance_covered = 0.0
             
-            # --- FIX CRÍTIC: RESERVA IMMEDIATA ---
             # Registrem el tren al TrafficManager ARA MATEIX.
             # Així, si un altre tren consulta la via en aquest mateix 'tick',
             # ja veurà que està ocupada per nosaltres.
