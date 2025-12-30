@@ -35,7 +35,7 @@ class RodaliesTraining:
         # Percentatge en que es manté el epsilon (Si decay_epsilon == 0.8 es manté el 80% per iteració)
         {'alpha': 0.9,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Agressiu (a=0.9)'},
         {'alpha': 0.7,  'gamma': 0.99, 'epsilon_decay': 0.5,  'label': 'Equilibrat (a=0.7)'},
-        {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'}
+        {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'},
         {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.95,  'label': 'Personalitzat (a=0.01)'}
     ]
 
