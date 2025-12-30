@@ -158,6 +158,33 @@ class TrafficManager:
         starting_track = 1 if "SUD" in line_name else 0
 
         if len(route_nodes) > 1:
+            # === SAFETY CHECK: OCUPACIÓ DE VIA ===
+            # Evitem fer spawn si la via de sortida està ocupada per prevenir xocs immediats.
+            start_node_name = route_nodes[0].name
+            next_node_name = route_nodes[1].name
+            
+            start_edge = TrafficManager.get_edge(start_node_name, next_node_name, starting_track)
+            
+            if start_edge:
+                # 1. Comprovem congestió al davant (Trens en el mateix sentit)
+                trains_on_edge = TrafficManager._train_positions.get(start_edge, [])
+                if trains_on_edge:
+                    # La llista està ordenada per progrés (més avançat primer). 
+                    # L'últim és el que acaba d'entrar (progrés proper a 0).
+                    _, last_progress = trains_on_edge[-1]
+                    
+                    # Si l'últim tren està a menys del 5% del tram, no sortim encara.
+                    if last_progress < 0.05:
+                        # print(f"[Spawn Bloquejat] Via ocupada a {start_node_name} per tren sortint.")
+                        return 
+
+                # 2. Comprovem col·lisió frontal (Trens venint de cara en la mateixa via física)
+                dist_threat = TrafficManager.check_head_on_collision(start_edge, 0.0)
+                if dist_threat < 3.0: # Si ve un tren de cara a menys de 3km
+                    # print(f"[Spawn Bloquejat] Tren arribant de cara a {start_node_name}.")
+                    return
+            # =====================================
+
             schedule = self.calculate_schedule(route_nodes, self.sim_time)
             
             new_train = Train(
