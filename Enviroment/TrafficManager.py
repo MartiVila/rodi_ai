@@ -27,7 +27,7 @@ class TrafficManager:
     _physical_segments = {}
     
     # Configuració
-    SPAWN_INTERVAL = 15    
+    SPAWN_INTERVAL = 30    
     #cada 2 hores rotació de vies en obstacle
     RESET_INTERVAL = 120   
     CHAOS_INTERVAL = 120    

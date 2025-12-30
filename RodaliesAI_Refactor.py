@@ -48,19 +48,18 @@ class RodaliesAI:
         """
         try:
             while self.running:
-                # 1. CÀLCUL DEL TEMPS (DELTA TIME)
+                # Calculem temps
                 dt_ms = self.clock.tick(self.FPS)       
                 dt_real_seconds = dt_ms / 1000.0          
                 dt_sim_minutes = dt_real_seconds * self.TIME_SCALE 
 
-                # 2. GESTIÓ D'INPUTS
+                # Gestio de l'input
                 self._handle_input()
 
-                # 3. ACTUALITZACIÓ DE LÒGICA
+                # Actualitzacio logica
                 # Deleguem al manager l'avanç de l'estat del món
                 self.manager.update(dt_sim_minutes)
 
-                # 4. VISUALITZACIÓ
                 self._draw()
 
         except Exception as e:
@@ -78,7 +77,7 @@ class RodaliesAI:
                 self.running = False
 
             if event.type == pygame.KEYDOWN:
-                # Tecla D: Debug manual instantani
+                # Debug manual instantani
                 if event.key == pygame.K_d:
                     print("\n--- DEBUG MANUAL ACTIVAT ---")
                     self.manager.debug_network_snapshot()
@@ -148,7 +147,7 @@ class RodaliesAI:
 
 
     def _draw_hud(self):
-        """Dibuixa la informació de text (HUD) sobre la simulació."""
+        """Dibuixa la informació de text sobre la simulació."""
         debug_font = pygame.font.SysFont("Arial", 16)
         
         # Dades del model
@@ -163,7 +162,7 @@ class RodaliesAI:
         time_str = f"Dia {days} | {hours:02d}:{mins:02d}"
         info_str = f"{time_str} | Trens actius: {num_trains} | Scale: x{self.TIME_SCALE}"
 
-        #Mostrar llegenda al HUD
+        #Mostrar llegenda
         llegenda_vies = " Vies: Verd=NORMAL, Vermell=OBSTACLE"
         llegenda_trens = " Trens: Blau=Avançat, Vermell=Retardat, Verd=Dins Horari, Groc=Aturat"
         info_str += llegenda_vies + llegenda_trens

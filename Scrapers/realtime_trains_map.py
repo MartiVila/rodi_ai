@@ -22,9 +22,9 @@ def poll_trains(poll_interval=5):
             if os.path.exists(LATEST_TRAINS_FILE):
                 with open(LATEST_TRAINS_FILE, 'r', encoding='utf-8') as fh:
                     obj = json.load(fh)
-                    # Basic validation
+                    # Validacio basica de l'estructura
                     trains = obj.get('trains', []) if isinstance(obj, dict) else []
-                    # Ensure fields are correct types
+                    
                     cleaned = []
                     for t in trains:
                         try:
@@ -63,7 +63,7 @@ def debug_raw():
 
 @app.route('/debug/json')
 def debug_json():
-  """Return parsed JSON from the latest_trains file for debugging."""
+  """Tornem el JSON parsejat del fitxer latest_trains per a depuració."""
   if os.path.exists(LATEST_TRAINS_FILE):
     try:
       with open(LATEST_TRAINS_FILE, 'r', encoding='utf-8') as fh:
@@ -76,14 +76,14 @@ def debug_json():
 
 @app.route("/trains")
 def trains_endpoint():
-    """Return latest trains as JSON."""
+    """Tornem els trens en format JSON per al mapa en temps real."""
     try:
         return jsonify(latest_trains)
     except Exception as e:
         app.logger.exception("Error serializing latest_trains")
         return jsonify({"timestamp": int(time.time()), "trains": [], "error": "serialization_failed", "detail": str(e)}), 500
 
-
+# Injeccio de JS i HTML per al mapa
 INDEX_HTML = """
 <!doctype html>
 <html>

@@ -1,4 +1,4 @@
-#Scrapper to get the real time position of each time of the network every 30 seconds
+#Scrapper per obtenir dades en temps real dels trens de Renfe cada 30s
 import requests
 import time
 import json
@@ -8,12 +8,10 @@ import math
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 LATEST_TRAINS_FILE = os.path.join(DATA_DIR, "latest_trains.json")
 
-#Train class
 class Train:
     def __init__(self, id, trip, origin, destination, lat, lon, speed, status):
         self.id = id
         self.trip = trip
-        #Origin and Destination refear to the ID of the stations the trian is between.
         self.origin = origin
         self.destination = destination
         self.lat = lat
@@ -24,16 +22,14 @@ class Train:
     def __repr__(self):
         return (f"Train(ID: {self.id}, Trip: {self.trip}, "
                 f"Position: ({self.lat}, {self.lon}), Status: {self.status})")
-    #Every time the object is created it will print its information
 
 def get_train_data(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-        #The document downloaded
         data = response.json()
 
-        trains = [] #List of train objects
+        trains = []
         
         for entity in data.get('entity', []):
             vehicle_data = entity.get('vehicle', {})
@@ -47,7 +43,6 @@ def get_train_data(url):
             current_status = vehicle_data.get('currentStatus')
             stop_id = vehicle_data.get('stopId')
 
-            #logic to determine origin and destination based on stop_id
             if current_status == "STOPPED_AT":
                 origin = stop_id
                 destination = stop_id
@@ -73,10 +68,6 @@ def get_train_data(url):
 
 
 def write_trains_to_file(trains, path=LATEST_TRAINS_FILE):
-    """Write list of Train objects to JSON file as simple dicts.
-    This is intended for local IPC: other processes (map server) can read this file
-    instead of calling the remote API again.
-    """
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         serial = []

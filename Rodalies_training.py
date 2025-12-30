@@ -30,13 +30,18 @@ class RodaliesTraining:
     MINUTES_PER_DAY = 1440 
     SAVE_INTERVAL = 1000      
 
+
+    # Convergencia de la Q-Table
+    CONVERGENCE_INTERVAL_DAYS = 100
+    CONVERGENCE_ATOL = 1e-6
+
     # Hiperparàmetres a provar
     HYPERPARAMS_GRID = [
         # Percentatge en que es manté el epsilon (Si decay_epsilon == 0.8 es manté el 80% per iteració)
         {'alpha': 0.9,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Agressiu (a=0.9)'},
         {'alpha': 0.7,  'gamma': 0.99, 'epsilon_decay': 0.5,  'label': 'Equilibrat (a=0.7)'},
         {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.2,  'label': 'Estratègic (a=0.3)'},
-        {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.95,  'label': 'Personalitzat (a=0.01)'}
+        {'alpha': 0.1,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Personalitzat (a=0.1)'}
     ]
 
     def __init__(self):
@@ -112,24 +117,17 @@ class RodaliesTraining:
         :return: Tupla (historial_retards, logs_trens, manager_final).
         """
         print(f"\n>>> INICIANT EXPERIMENT: {params['label']} <<<")
+
+        safe_label = params['label'].replace(' ', '_').replace('(', '').replace(')', '').replace('=', '')
         
-        # Generem nom únic per evitar sobreescriure fitxers entre experiments del GridSearch
-        #safe_label = params['label'].replace(' ', '_').replace('(', '').replace(')', '').replace('=', '')
-        #brain_filename = f"q_table_{safe_label}.pkl"
         brain_filename = f"q_table.pkl"
         brain_path = os.path.join(self.BRAINS_DIR, brain_filename)
         brain_json_path = os.path.join(self.BRAINS_DIR, "q_table.json")
 
-        # 1. Inicialitzem el Manager (Mode Training = True -> Sense gràfics pesats)
         manager = TrafficManager(width=1000, height=1000, is_training=True)
         
-        # 2. Configuració Agent (Cervell)
         initial_epsilon = 1.0
         
-        # Opcional: Si volguéssim continuar un entrenament previ:
-        # if os.path.exists(brain_path):
-        #     initial_epsilon = 0.5 
-
         manager.brain = QLearningAgent(
             alpha=params['alpha'], 
             gamma=params['gamma'], 
@@ -147,10 +145,12 @@ class RodaliesTraining:
         start_time = time.time()
         current_level_idx = 0
 
-        # --- BUCLE DE DIES (EPISODIS) ---
+        # Per a la convergència de la Q-Table
+        convergence_rows = []
+        prev_q_snapshot = manager.brain.qtable_snapshot()
+
         for day in range(1, self.TOTAL_DAYS + 1):
             
-            # A. GESTIÓ DEL CURRICULUM (LEVEL UP)
             # Calculem quin nivell toca segons el dia actual
             new_level_idx = min((day - 1) // days_per_level, len(curriculum_levels) - 1)
             
@@ -165,10 +165,10 @@ class RodaliesTraining:
                 manager.brain.epsilon = 1.0 
                 print(f"\n*** [Dia {day}] CURRICULUM LEVEL UP! -> {level_name} ***")
 
-            # B. RESET DIARI D'ENTORN
+            # RESET DIARI D'ENTORN
             manager.active_trains.clear()
             manager.completed_train_logs.clear()
-            # Important: Netejar posicions estàtiques si s'usen a TrafficManager
+
             if hasattr(TrafficManager, '_train_positions'):
                 TrafficManager._train_positions.clear()
             
@@ -178,7 +178,7 @@ class RodaliesTraining:
             
             delays_in_step = []
             steps_per_day = int(self.MINUTES_PER_DAY // self.DT_STEP)
-            # C. SIMULACIÓ (STEPS)
+
             # Executem 1440 minuts simulats
             for _ in range(steps_per_day):
                 manager.update(dt_minutes=self.DT_STEP) 
@@ -189,16 +189,12 @@ class RodaliesTraining:
                     step_delays = [abs(t.calculate_delay()) for t in manager.active_trains]
                     delays_in_step.append(np.mean(step_delays))
             
-            # D. MÈTRIQUES DEL DIA
             daily_avg = np.mean(delays_in_step) if delays_in_step else 0
             history_avg_delay.append(daily_avg)
-            
-            # E. DECAY DE L'EPSILON - Percentatge en que es manté el epsilon (Si decay_epsilon == 0.8 es manté el 80% per iteració)
-            # Reduïm l'aleatorietat cada 100 dies per estabilitzar l'aprenentatge
+
             if day % 100 == 0:
                 manager.brain.decay_epsilon(params['epsilon_decay'], min_epsilon=0.01)
             
-            # F. LOGS I GUARDAT
             if day % 100 == 0:
                 elapsed = time.time() - start_time
                 days_left = self.TOTAL_DAYS - day
@@ -208,6 +204,24 @@ class RodaliesTraining:
                 print(f"   Dia {day:05d} [{curriculum_levels[current_level_idx]}] "
                       f"| Eps: {manager.brain.epsilon:.4f} | Retard: {daily_avg:.2f}m "
                       f"| ETA: {eta_min:.1f} min")
+                
+            # convergencia Qtable
+            if day % self.CONVERGENCE_INTERVAL_DAYS == 0:
+                curr_q_snapshot = manager.brain.qtable_snapshot()
+                metrics = QLearningAgent.qtable_convergence_metrics(
+                    prev_q_snapshot,
+                    curr_q_snapshot,
+                    atol=self.CONVERGENCE_ATOL,
+                )
+                convergence_rows.append({
+                    "day": day,
+                    "level": curriculum_levels[current_level_idx],
+                    "epsilon": float(manager.brain.epsilon),
+                    "daily_avg_delay": float(daily_avg),
+                    **metrics,
+                })
+                prev_q_snapshot = curr_q_snapshot
+            
 
             if day % self.SAVE_INTERVAL == 0:
                 manager.brain.save_table(brain_path)
@@ -217,8 +231,52 @@ class RodaliesTraining:
         manager.brain.save_table(brain_path)
         manager.brain.export_qtable_to_json(brain_json_path)
 
+        # Guardem dades de convergència
+        self._save_qtable_convergence(convergence_rows, safe_label)
+
         self._save_complete_csv(manager.completed_train_logs, params)
         return history_avg_delay, manager.completed_train_logs, manager
+    
+
+    def _save_qtable_convergence(self, convergence_rows, safe_label):
+        """Guarda un CSV i un PNG de la convergència de la Q-Table (deltas entre snapshots)."""
+        if not convergence_rows:
+            print("[Convergència] Sense dades (convergence_rows buit).")
+            return
+
+        df = pd.DataFrame(convergence_rows)
+
+        # CSV
+        csv_path = os.path.join(self.OUTPUT_DIR, f"QTABLE_CONVERGENCE_{safe_label}.csv")
+        df.to_csv(csv_path, sep=';', index=False, encoding='utf-8')
+
+        # PNG
+        plot_path = os.path.join(self.PLOTS_DIR, f"qtable_convergence_{safe_label}.png")
+        plt.figure(figsize=(14, 9))
+
+        ax1 = plt.gca()
+        ax1.plot(df["day"], df["mean_abs_delta"], label="mean_abs_delta", linewidth=2)
+        ax1.plot(df["day"], df["max_abs_delta"], label="max_abs_delta", linewidth=1.5, alpha=0.9)
+        ax1.set_xlabel("Dia")
+        ax1.set_ylabel("ΔQ (abs)")
+        ax1.set_yscale('log')
+        ax1.grid(True, alpha=0.25)
+
+        ax2 = ax1.twinx()
+        ax2.plot(df["day"], df["entries"], label="entries", color="tab:green", linewidth=1.5, alpha=0.9)
+        ax2.set_ylabel("Mida Q-Table (entrades)")
+
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+
+        plt.title("Convergència Q-Table (deltas entre snapshots)")
+        plt.tight_layout()
+        plt.savefig(plot_path, dpi=300)
+
+        print(f"[Convergència] CSV guardat: {csv_path}")
+        print(f"[Convergència] PNG guardat: {plot_path}")
+
 
     """
     ############################################################################################

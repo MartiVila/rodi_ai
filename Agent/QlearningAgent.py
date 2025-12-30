@@ -40,7 +40,6 @@ class QLearningAgent:
         return f"{origin}->{destination}"
     
     def action(self, state):
-        """state = (origen, destí, diff_discretized, is_blocked)"""
         # Exploració (Epsilon-greedy)
         if random.random() < self.epsilon:
             return random.choice(list(Datas.AGENT_ACTIONS.keys()))
@@ -51,7 +50,7 @@ class QLearningAgent:
         
         # Si tots són 0 (estat nou), triem a l'atzar per evitar biaix de sempre triar la primera acció (0)
         if all(v == 0 for v in qs):
-             return random.choice(list(Datas.AGENT_ACTIONS.keys()))
+            return random.choice(list(Datas.AGENT_ACTIONS.keys()))
              
         # Retornem l'índex de l'acció amb més valor Q
         # Utilitzem np.argmax o un mètode robust per llistes
@@ -67,6 +66,80 @@ class QLearningAgent:
         else:
             max_q_next = max(self.q[(s2, a2)] for a2 in Datas.AGENT_ACTIONS)
             self.q[(s, a)] += self.alpha * (r + self.gamma * max_q_next - self.q[(s, a)])
+
+
+    ############################################################################################
+    ####################   MÈTRIQUES DE CONVERGÈNCIA (Q-TABLE)   ###############################
+    ############################################################################################
+
+    def qtable_snapshot(self):
+        """Retorna una còpia (dict) de la Q-Table actual per poder comparar evolució.
+
+        Nota: fem dict(self.q) per deslligar-nos del defaultdict.
+        """
+        return dict(self.q)
+
+    @staticmethod
+    def qtable_convergence_metrics(prev_snapshot, curr_snapshot, atol=1e-9):
+        """Calcula mètriques de canvi entre dos snapshots de Q-Table.
+        """
+        if prev_snapshot is None:
+            prev_snapshot = {}
+        if curr_snapshot is None:
+            curr_snapshot = {}
+
+        prev_keys = set(prev_snapshot.keys())
+        curr_keys = set(curr_snapshot.keys())
+        all_keys = prev_keys | curr_keys
+
+        if not all_keys:
+            return {
+                "entries": 0,
+                "new_entries": 0,
+                "removed_entries": 0,
+                "changed_entries": 0,
+                "changed_fraction": 0.0,
+                "mean_abs_delta": 0.0,
+                "max_abs_delta": 0.0,
+                "l2_delta": 0.0,
+            }
+
+        abs_deltas = []
+        max_abs = 0.0
+        l2_acc = 0.0
+        changed = 0
+
+        for key in all_keys:
+            prev_val = float(prev_snapshot.get(key, 0.0))
+            curr_val = float(curr_snapshot.get(key, 0.0))
+            d = curr_val - prev_val
+            ad = abs(d)
+            abs_deltas.append(ad)
+            if ad > max_abs:
+                max_abs = ad
+            l2_acc += d * d
+            if ad > atol:
+                changed += 1
+
+        mean_abs = float(np.mean(abs_deltas)) if abs_deltas else 0.0
+        l2 = float(np.sqrt(l2_acc))
+
+        new_entries = len(curr_keys - prev_keys)
+        removed_entries = len(prev_keys - curr_keys)
+        entries = len(curr_keys)
+        changed_fraction = changed / len(all_keys) if all_keys else 0.0
+
+        return {
+            "entries": entries,
+            "new_entries": new_entries,
+            "removed_entries": removed_entries,
+            "changed_entries": changed,
+            "changed_fraction": float(changed_fraction),
+            "mean_abs_delta": float(mean_abs),
+            "max_abs_delta": float(max_abs),
+            "l2_delta": float(l2),
+        }
+
 
     ############################################################################################
     ########################   MÈTODES DE PERSISTÈNCIA   #######################################
