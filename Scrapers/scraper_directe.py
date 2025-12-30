@@ -1,11 +1,12 @@
 #Scrapper to get the real time position of each time of the network every 30 seconds
-
 import requests
 import time
 import json
+import os
+import math
 
-#The fucntion of this script will be to get all the train infomration every 30 seconds, 
-#and be able to provide the AI model object trains with their position and between which stations they are
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+LATEST_TRAINS_FILE = os.path.join(DATA_DIR, "latest_trains.json")
 
 #Train class
 class Train:
@@ -17,7 +18,6 @@ class Train:
         self.destination = destination
         self.lat = lat
         self.lon = lon
-        #The AI must calculate the speed by now will be inf
         self.speed = speed
         self.status = status
 
@@ -28,14 +28,13 @@ class Train:
 
 def get_train_data(url):
     try:
-        #By now we won't stablish any timeout time
         response = requests.get(url)
         response.raise_for_status()
         #The document downloaded
         data = response.json()
 
         trains = [] #List of train objects
-        #Knowing th estructure of the Json we can extract the information we want
+        
         for entity in data.get('entity', []):
             vehicle_data = entity.get('vehicle', {})
             position = vehicle_data.get('position', {})
@@ -50,18 +49,15 @@ def get_train_data(url):
 
             #logic to determine origin and destination based on stop_id
             if current_status == "STOPPED_AT":
-                #When the train is stopped at a station, both origin and destination are the same
                 origin = stop_id
                 destination = stop_id
             elif current_status == "IN_TRANSIT_TO":
-                origin = "unknown"  #We don't have this information here, but the model will fix it.
+                origin = "unknown" 
                 destination = stop_id
-            #The last case is status = "INCOMING_AT" that means the station showd is the destination, but is coming from another station
             else:
                 origin = "unknown"
                 destination = stop_id
-            # Create a Train object if all key data exists
-            #The speed will be stabblished at infinit for now
+
             speed = float('inf')
             if all([train_id, latitude, longitude, trip_id]):
                 trains.append(Train(train_id, trip_id, origin, destination, latitude, longitude, speed, current_status))
@@ -75,8 +71,62 @@ def get_train_data(url):
         print(f"Error decoding JSON: {e}")
         return []
 
-#Example Main, usually and in proprer use the AI will have to properly use the function get_train_data
-#so the AI wil get a list of object every 30 seconds
+
+def write_trains_to_file(trains, path=LATEST_TRAINS_FILE):
+    """Write list of Train objects to JSON file as simple dicts.
+    This is intended for local IPC: other processes (map server) can read this file
+    instead of calling the remote API again.
+    """
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        serial = []
+        for t in trains:
+            try:
+                lat_raw = t.lat
+                lon_raw = t.lon
+                if isinstance(lat_raw, str):
+                    lat_raw = lat_raw.replace(',', '.')
+                if isinstance(lon_raw, str):
+                    lon_raw = lon_raw.replace(',', '.')
+                lat = float(lat_raw)
+                lon = float(lon_raw)
+
+                if not (math.isfinite(lat) and math.isfinite(lon)):
+                    continue
+
+                
+                raw_speed = t.speed
+                try:
+                    speed = float(raw_speed)
+                    if not math.isfinite(speed):
+                        speed = None
+                except Exception:
+                    speed = None
+
+                serial.append({
+                    'id': str(t.id),
+                    'trip': t.trip,
+                    'origin': t.origin,
+                    'destination': t.destination,
+                    'lat': lat,
+                    'lon': lon,
+                    'speed': speed,
+                    'status': t.status,
+                })
+            except Exception:
+
+                continue
+
+        tmp_path = path + '.tmp'
+        with open(tmp_path, 'w', encoding='utf-8') as fh:
+            json.dump({'timestamp': int(time.time()), 'trains': serial}, fh, ensure_ascii=False)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, path)
+    except Exception as e:
+        print(f"Error writing latest trains to file: {e}")
+
+
 if __name__ == "__main__":
     renfe_url = "https://gtfsrt.renfe.com/vehicle_positions.json"
 
@@ -87,12 +137,12 @@ if __name__ == "__main__":
         if train_list:
             print(f"Found {len(train_list)} trains.")
             for train in train_list:
-                #Pito to know the information of each train
                 print(train)
+            try:
+                write_trains_to_file(train_list)
+            except Exception as e:
+                print(f"Error saving latest trains: {e}")
         else:
             print("No train data found.")
         
-        #ANOTTATE:
-        #I noticed a problem, if the code is not executed at the start of the cycle, we my get a delay in the data fetching
-        #We should search for a way to coordinate with the update cycle of Renfe
         time.sleep(30)
