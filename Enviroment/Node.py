@@ -2,8 +2,8 @@ import pygame
 
 class Node:
     """
-    Representa una estació o punt d'interès en el graf ferroviari.
-    Ara inclou gestió de capacitat (Slots).
+    representa una estacio
+    acqui el tren pot fer canvi de via, i parase
     """
 
     def __init__(self, x, y, node_id, name=""):
@@ -12,19 +12,19 @@ class Node:
         self.id = node_id
         self.name = name
         
-        # Visuals
+        #varibales visuals
         self.radius = 5
         self.highlight = False
         
-        # Graf: Llista d'arestes connectades per ID de destí
+        #les vies connectades a l'esatció
         self.neighbors = {} 
 
-        # --- NOVETAT: CAPACITAT D'ESTACIÓ ---
-        self.max_capacity = 4  # Màxim trens parats simultàniament
-        self.current_trains = 0 # Comptador actual
+        #trns que hi poden parar a la vegada i els que hi han ara
+        self.max_capacity = 4
+        self.current_trains = 0 
 
     def has_capacity(self):
-        """Retorna True si hi ha lloc per un altre tren."""
+        #per saber si hi ha espai per parar el tren
         return self.current_trains < self.max_capacity
 
     def enter_station(self):
@@ -35,14 +35,12 @@ class Node:
             self.current_trains -= 1
 
     def draw(self, screen):
-        # ... (Codi de dibuix sense canvis, excepte potser mostrar l'ocupació) ...
-        # Color base: Blau Marí
         color = (0, 100, 200) 
         
         if getattr(self, 'is_siding', False):
             color = (128, 0, 128) 
 
-        # Indicar visualment si l'estació està plena (Vermell fosc)
+        #Si l'estació està plena, canvia el color a vermell fosc
         if self.current_trains >= self.max_capacity:
             color = (150, 0, 0)
 
@@ -51,7 +49,6 @@ class Node:
 
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius)
         
-        # Opcional: Mostrar ocupació (ex: "Sants [3/4]")
         if self.highlight:
             font = pygame.font.SysFont("Arial", 14, bold=True)
             info_text = f"{self.name} [{self.current_trains}/{self.max_capacity}]"

@@ -6,10 +6,10 @@ class Datas:
     Conté la definició de la línia R1, estacions, connexions i temps de parada.
     """
 
-    # Temps (minuts) que un tren ha d'esperar obligatòriament a cada estació
-    STOP_STA_TIME = 0.5  # 30 segons de parada tècnica
+    #temps en minuts que un tren es para a una estació
+    STOP_STA_TIME = 0.5  #30 segons de parada tècnica
 
-    # Llista ordenada d'estacions (R1 Nord)
+    #llista ordenada de les estacions de la línia R1
     R1_STA = [
         "L'HOSPITALET DE LLOBREGAT", "BARCELONA-SANTS", "PLACA DE CATALUNYA",
         "ARC DE TRIOMF", "BARCELONA-CLOT-ARAGO", "SANT ADRIA DE BESOS",
@@ -59,8 +59,7 @@ class Datas:
         3: "CANVI" 
     }
 
-    # [NOU] TEMPS REALS EXTRETS DE L'HORARI (PDF R1 2025) [cite: 40, 41, 46, 51]
-    # Format: (Origen, Desti): Minuts
+    #Temps reals entre estacions de la linia.
     R1_SEGMENT_TIMES = {
         ("L'HOSPITALET DE LLOBREGAT", "BARCELONA-SANTS"): 5,
         ("BARCELONA-SANTS", "PLACA DE CATALUNYA"): 4,
@@ -90,13 +89,12 @@ class Datas:
 
     @staticmethod
     def get_travel_time(station_a, station_b):
-        """Retorna el temps oficial entre dues estacions (bidireccional)."""
-        # Intentem buscar la parella directa
+        #retorna el temps entre dues estacions
+        #anada
         t = Datas.R1_SEGMENT_TIMES.get((station_a, station_b))
         if t is not None: return t
-        
-        # Intentem buscar la inversa (tornada)
+        #tornada
         t = Datas.R1_SEGMENT_TIMES.get((station_b, station_a))
         if t is not None: return t
         
-        return 4.0 # Fallback per defecte
+        return 4.0
