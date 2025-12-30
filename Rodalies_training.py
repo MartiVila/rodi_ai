@@ -43,7 +43,7 @@ class RodaliesTraining:
     ]
     """
     HYPERPARAMS_PERS_GRID = [
-        {'alpha': 0.8,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Personalitzat (a=0.01)'}
+        {'alpha': 0.01,  'gamma': 0.99, 'epsilon_decay': 0.95,  'label': 'Personalitzat (a=0.01)'}
     ]
     def __init__(self):
         """Inicialitza l'entorn de treball i crea els directoris necessaris."""

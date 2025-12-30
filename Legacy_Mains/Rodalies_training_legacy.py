@@ -43,7 +43,7 @@ class RodaliesTraining:
     ]
     """
     HYPERPARAMS_PERS_GRID = [
-        {'alpha': 0.8,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Personalitzat (a=0.01)'}
+        {'alpha': 0.3,  'gamma': 0.99, 'epsilon_decay': 0.8,  'label': 'Personalitzat (a=0.01)'}
     ]
     def __init__(self):
         """Inicialitza l'entorn de treball i crea els directoris necessaris."""
@@ -313,9 +313,9 @@ class RodaliesTraining:
                     if actual_time:
                         delay = actual_time - expected_time
                         status = "PUNTUAL"
-                        if delay > 2: status = "TARD"
+                        if delay > 5: status = "TARD"
                         if delay > 10: status = "MOLT TARD"
-                        if delay < -2: status = "AVANÇAT"
+                        if delay < -5: status = "AVANÇAT"
                         
                         writer.writerow([
                             t_id, origin_name, dest_name, 
