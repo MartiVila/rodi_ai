@@ -81,3 +81,8 @@ Per defecte, aquests scripts treballen amb fitxers JSON a `Scrapers/data/`.
 
 - El projecte inclou fitxers de dades i resultats (CSV/JSON/PNG) dins del repositori.
 - Si vols reduir la mida del repo, es poden ignorar plots i artefactes d'entrenament i regenerar-los quan calgui.
+
+## Llicència
+
+Aquest projecte està destinat a finalitats acadèmiques i de recerca.
+Per a altres usos, contactar amb els autors.
